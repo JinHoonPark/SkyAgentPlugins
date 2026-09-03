@@ -1,0 +1,17 @@
+{
+  "name": "sky-agent-plugins",
+  "owner": {
+    "name": "Sky"
+  },
+  "description": "Personal agent plugin marketplace for Claude Code and Codex CLI.",
+  "plugins": [
+    {
+      "name": "paseo-toolkit",
+      "source": "./plugins/paseo-toolkit",
+      "description": "Operate the Paseo CLI and daemon: configure agent profiles and report the results.",
+      "keywords": [
+        "category:workflow"
+      ]
+    }
+  ]
+}

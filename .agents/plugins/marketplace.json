@@ -1,0 +1,24 @@
+{
+  "name": "sky-agent-plugins",
+  "interface": {
+    "displayName": "Sky Agent Plugins"
+  },
+  "plugins": [
+    {
+      "name": "codex-skill-creator",
+      "source": {
+        "source": "local",
+        "path": "./plugins/codex-skill-creator"
+      },
+      "category": "workflow"
+    },
+    {
+      "name": "paseo-toolkit",
+      "source": {
+        "source": "local",
+        "path": "./plugins/paseo-toolkit"
+      },
+      "category": "workflow"
+    }
+  ]
+}
