@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """Validate, preview, apply, and roll back Paseo agent profile changes.
 
-Every run writes one UTF-8 JSON document to stdout, with one deliberate
-exception: ``--help`` prints argparse's plain-text usage instead.  A compact,
-human-readable summary is written only to stderr so callers can safely pipe
-stdout to a JSON parser.
+Every non-list run writes one UTF-8 JSON document to stdout, with one deliberate
+exception: ``--help`` prints argparse's plain-text usage instead. ``--list``
+writes a complete human-readable profile list unless ``--json`` is supplied.
+A compact human-readable summary is written to stderr for JSON runs.
 """
+
+# ``--modes-file`` schema (UTF-8 JSON, no BOM):
+# {"providers": {"<provider-id>": {"modeIds": ["<mode-id>", ...],
+#                                      "defaultMode": "<mode-id>"}}}
 
 from __future__ import annotations
 
@@ -69,6 +73,38 @@ ICON_REGISTRY = frozenset(
         "shield",
     }
 )
+ICON_EMOJI = {
+    "code": "💻",
+    "terminal": "⌨️",
+    "bug": "🐛",
+    "wrench": "🔧",
+    "hammer": "🔨",
+    "flask": "🧪",
+    "testTube": "🧫",
+    "microscope": "🔬",
+    "search": "🔍",
+    "eye": "👁️",
+    "palette": "🎨",
+    "feather": "🪶",
+    "pencil": "📝",
+    "fileText": "📄",
+    "book": "📚",
+    "rocket": "🚀",
+    "package": "📦",
+    "boxes": "🗃️",
+    "server": "🖥️",
+    "database": "🗄️",
+    "cpu": "🧮",
+    "cloud": "🌤️",
+    "globe": "🌐",
+    "gitBranch": "🌿",
+    "layers": "🗂️",
+    "compass": "🧭",
+    "brain": "🧠",
+    "sparkles": "✨",
+    "shield": "🛡️",
+}
+DEFAULT_PROFILE_ICON_EMOJI = "🔹"
 COLOR_REGISTRY = frozenset(
     {
         "none",
@@ -96,6 +132,8 @@ OPTIONAL_PROFILE_KEYS = (
     "notes",
 )
 KNOWN_PROFILE_KEYS = frozenset(REQUIRED_PROFILE_KEYS + OPTIONAL_PROFILE_KEYS)
+# This fallback is used only when --modes-file is absent.  It deliberately has
+# no grok entry because grok's actual complete mode list has not been confirmed.
 KNOWN_MODE_IDS = {
     "claude": frozenset({"plan", "default", "acceptEdits", "auto", "bypassPermissions"}),
     "codex": frozenset({"auto", "auto-review", "full-access"}),
@@ -171,6 +209,13 @@ class ProfilePlan:
     profiles: list[Any]
     added: list[str]
     replaced: list[str]
+    removed: list[Any]
+
+
+@dataclass(frozen=True)
+class ProviderModeCatalog:
+    mode_ids: frozenset[str]
+    default_mode: str
 
 
 class JsonArgumentParser(argparse.ArgumentParser):
@@ -254,7 +299,9 @@ def read_input_bytes(source: str) -> bytes:
     return Path(source).read_bytes()
 
 
-def load_input_profiles(source: str, problems: Problems) -> list[Any] | None:
+def load_input_profiles(
+    source: str, problems: Problems, *, require_array: bool = False
+) -> list[Any] | None:
     label = "stdin" if source == "-" else f"입력 파일 {source}"
     try:
         raw = read_input_bytes(source)
@@ -269,12 +316,96 @@ def load_input_profiles(source: str, problems: Problems) -> list[Any] | None:
         problems.error("JSON", f"{label} JSON 오류: {exc}", source)
         return None
 
+    if isinstance(document, dict) and require_array:
+        problems.error("INPUT_TOP_LEVEL", f"{label}은 JSON 배열이어야 합니다.", source)
+        return None
     if isinstance(document, dict):
         return [document]
     if isinstance(document, list):
         return document
     problems.error("INPUT_TOP_LEVEL", f"{label}은 JSON 객체 또는 배열이어야 합니다.", source)
     return None
+
+
+def load_mode_catalog(path: Path, problems: Problems) -> dict[str, ProviderModeCatalog] | None:
+    """Load the caller-supplied authoritative mode catalog for --modes-file."""
+
+    initial_error_count = len(problems.errors)
+    snapshot = load_snapshot_safely(path, "modes 파일", problems)
+    if snapshot is None:
+        return None
+    document = snapshot.document
+    if not isinstance(document, dict):
+        problems.error("MODES_FILE", "modes 파일의 최상위 값은 JSON 객체여야 합니다.", path_text(path))
+        return None
+    providers = document.get("providers")
+    if not isinstance(providers, dict):
+        problems.error(
+            "MODES_FILE",
+            "modes 파일은 providers 객체를 가져야 합니다.",
+            path_text(path),
+        )
+        return None
+
+    catalog: dict[str, ProviderModeCatalog] = {}
+    for provider, entry in providers.items():
+        entry_path = f"providers[{provider!r}]"
+        if normal_string(provider) is None:
+            problems.error("MODES_FILE", "provider id는 비어 있지 않은 문자열이어야 합니다.", entry_path)
+            continue
+        if not isinstance(entry, dict):
+            problems.error("MODES_FILE", "provider 항목은 JSON 객체여야 합니다.", entry_path)
+            continue
+
+        mode_ids = entry.get("modeIds")
+        valid_entry = True
+        if not isinstance(mode_ids, list):
+            problems.error("MODES_FILE", "modeIds는 JSON 배열이어야 합니다.", f"{entry_path}.modeIds")
+            valid_entry = False
+            mode_ids = []
+
+        identifiers: list[str] = []
+        for index, mode_id in enumerate(mode_ids):
+            normalized = normal_string(mode_id)
+            if normalized is None:
+                problems.error(
+                    "MODES_FILE",
+                    "modeIds의 각 값은 비어 있지 않은 문자열이어야 합니다.",
+                    f"{entry_path}.modeIds[{index}]",
+                )
+                valid_entry = False
+            elif normalized in identifiers:
+                problems.error(
+                    "MODES_FILE",
+                    f"modeIds에 {normalized!r}가 중복되었습니다.",
+                    f"{entry_path}.modeIds[{index}]",
+                )
+                valid_entry = False
+            else:
+                identifiers.append(normalized)
+
+        default_mode = normal_string(entry.get("defaultMode"))
+        if default_mode is None:
+            problems.error(
+                "MODES_FILE",
+                "defaultMode는 비어 있지 않은 문자열이어야 합니다.",
+                f"{entry_path}.defaultMode",
+            )
+            valid_entry = False
+        elif default_mode not in identifiers:
+            problems.error(
+                "MODES_FILE",
+                "defaultMode는 modeIds 중 하나여야 합니다.",
+                f"{entry_path}.defaultMode",
+            )
+            valid_entry = False
+
+        if valid_entry:
+            catalog[provider] = ProviderModeCatalog(frozenset(identifiers), default_mode)
+
+    if len(problems.errors) != initial_error_count:
+        return None
+    return catalog
 
 
 def make_parser() -> JsonArgumentParser:
@@ -293,6 +424,41 @@ def make_parser() -> JsonArgumentParser:
         "--update",
         action="store_true",
         help="동일 id가 있을 때 정확히 하나의 기존 프로필을 교체합니다.",
+    )
+    parser.add_argument(
+        "--replace-all",
+        action="store_true",
+        help="INPUT의 프로필 배열로 기존 agentProfiles 배열 전체를 교체합니다.",
+    )
+    parser.add_argument(
+        "--delete",
+        nargs="+",
+        metavar="ID",
+        help="하나 이상의 ID와 일치하는 기존 프로필을 한 번에 제거합니다. INPUT과 함께 사용할 수 없습니다.",
+    )
+    parser.add_argument(
+        "--list",
+        dest="list_profiles",
+        action="store_true",
+        help="현재 agentProfiles를 읽어 사람이 읽는 형태로 출력합니다. --json이면 JSON을 출력합니다.",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="--list 결과를 사람이 읽는 형태 대신 JSON으로 출력합니다.",
+    )
+    parser.add_argument(
+        "--detail",
+        action="store_true",
+        help="--list의 사람이 읽는 출력을 상세형으로 표시합니다. --json에는 영향을 주지 않습니다.",
+    )
+    parser.add_argument(
+        "--modes-file",
+        metavar="PATH",
+        help=(
+            "권위 있는 provider별 mode 목록 JSON입니다: "
+            '{"providers":{"<provider-id>":{"modeIds":["<mode-id>"],"defaultMode":"<mode-id>"}}}'
+        ),
     )
     parser.add_argument(
         "--config",
@@ -463,7 +629,12 @@ def list_models(provider: str, problems: Problems) -> dict[str, Mapping[str, Any
 
 
 def validate_config_document(
-    document: Any, label: str, problems: Problems, path: Path | None = None
+    document: Any,
+    label: str,
+    problems: Problems,
+    path: Path | None = None,
+    *,
+    allow_missing_agent_profiles: bool = False,
 ) -> list[Any] | None:
     location = path_text(path)
     if not isinstance(document, dict):
@@ -473,7 +644,32 @@ def validate_config_document(
     if not isinstance(daemon, dict):
         problems.error("CONFIG_DAEMON", f"{label}.daemon은 JSON 객체여야 합니다.", location)
         return None
-    profiles = daemon.get("agentProfiles")
+    if "agentProfiles" not in daemon:
+        if allow_missing_agent_profiles:
+            return []
+        problems.error("CONFIG_ARRAY", f"{label}.daemon.agentProfiles는 배열이어야 합니다.", location)
+        return None
+    profiles = daemon["agentProfiles"]
+    if not isinstance(profiles, list):
+        problems.error("CONFIG_ARRAY", f"{label}.daemon.agentProfiles는 배열이어야 합니다.", location)
+        return None
+    return profiles
+
+
+def list_profiles_from_config(
+    document: Any, label: str, problems: Problems, path: Path | None = None
+) -> list[Any] | None:
+    """Read agentProfiles for display, treating an omitted array as empty only here."""
+
+    location = path_text(path)
+    if not isinstance(document, dict):
+        problems.error("CONFIG_OBJECT", f"{label}의 최상위 값은 JSON 객체여야 합니다.", location)
+        return None
+    daemon = document.get("daemon")
+    if not isinstance(daemon, dict):
+        problems.error("CONFIG_DAEMON", f"{label}.daemon은 JSON 객체여야 합니다.", location)
+        return None
+    profiles = daemon.get("agentProfiles", [])
     if not isinstance(profiles, list):
         problems.error("CONFIG_ARRAY", f"{label}.daemon.agentProfiles는 배열이어야 합니다.", location)
         return None
@@ -589,7 +785,11 @@ def validate_batch_duplicates(candidates: Iterable[Candidate], problems: Problem
 
 
 def validate_provider_model_and_thinking(
-    candidates: list[Candidate], providers: dict[str, Mapping[str, Any]] | None, problems: Problems
+    candidates: list[Candidate],
+    providers: dict[str, Mapping[str, Any]] | None,
+    mode_catalog: dict[str, ProviderModeCatalog] | None,
+    use_known_mode_fallback: bool,
+    problems: Problems,
 ) -> None:
     provider_ready: dict[str, bool] = {}
     providers_needing_models: set[str] = set()
@@ -618,19 +818,35 @@ def validate_provider_model_and_thinking(
             provider_ready[candidate.provider] = available
 
         if candidate.mode_id is not None:
-            default_mode = (
-                normal_string(provider_info.get("defaultMode"))
-                if provider_info is not None
-                else None
-            )
-            known_modes = KNOWN_MODE_IDS.get(candidate.provider, frozenset())
-            if candidate.mode_id != default_mode and candidate.mode_id not in known_modes:
-                problems.warning(
-                    "MODE_UNVERIFIED",
-                    f"modeId {candidate.mode_id!r}는 0.7.2 스냅샷에 없고 provider의 "
-                    f"defaultMode {default_mode!r}와도 일치하지 않습니다. CLI는 전체 mode ID를 열거하지 않습니다.",
-                    f"{profile_path}.modeId",
+            if mode_catalog is not None:
+                provider_modes = mode_catalog.get(candidate.provider)
+                if provider_modes is None:
+                    problems.error(
+                        "MODE_PROVIDER",
+                        f"--modes-file에 provider {candidate.provider!r}의 modeIds가 없습니다.",
+                        f"{profile_path}.modeId",
+                    )
+                elif candidate.mode_id not in provider_modes.mode_ids:
+                    problems.error(
+                        "MODE",
+                        f"modeId {candidate.mode_id!r}가 --modes-file의 provider "
+                        f"{candidate.provider!r} modeIds에 없습니다.",
+                        f"{profile_path}.modeId",
+                    )
+            elif use_known_mode_fallback:
+                default_mode = (
+                    normal_string(provider_info.get("defaultMode"))
+                    if provider_info is not None
+                    else None
                 )
+                known_modes = KNOWN_MODE_IDS.get(candidate.provider, frozenset())
+                if candidate.mode_id != default_mode and candidate.mode_id not in known_modes:
+                    problems.warning(
+                        "MODE_UNVERIFIED",
+                        f"modeId {candidate.mode_id!r}는 0.7.2 스냅샷에 없고 provider의 "
+                        f"defaultMode {default_mode!r}와도 일치하지 않습니다. CLI는 전체 mode ID를 열거하지 않습니다.",
+                        f"{profile_path}.modeId",
+                    )
 
         if candidate.provider == "claude" and candidate.mode_id == "plan":
             problems.warning(
@@ -727,11 +943,20 @@ def validate_conflicts(
                 if identifier is not None:
                     existing_by_id.setdefault(identifier, []).append(index)
 
+    available_identifiers = ", ".join(repr(identifier) for identifier in existing_by_id) or "(없음)"
+
     for candidate in candidates:
         if candidate.identifier is None:
             continue
         matches = existing_by_id.get(candidate.identifier, [])
         if not matches:
+            if update:
+                problems.error(
+                    "UPDATE_NOT_FOUND",
+                    f"--update 대상 id {candidate.identifier!r}가 기존 agentProfiles에 없습니다. "
+                    f"사용 가능한 id: {available_identifiers}.",
+                    f"profiles[{candidate.index}].id",
+                )
             continue
         if not update:
             problems.error(
@@ -770,7 +995,119 @@ def build_profile_plan(
         else:
             planned_profiles.append(copy.deepcopy(candidate.profile))
             added.append(candidate.identifier)
-    return ProfilePlan(profiles=planned_profiles, added=added, replaced=replaced)
+    return ProfilePlan(profiles=planned_profiles, added=added, replaced=replaced, removed=[])
+
+
+def profiles_removed_by_plan(existing_profiles: list[Any], planned_profiles: list[Any]) -> list[Any]:
+    """Return original entries not retained value-for-value in the planned array."""
+
+    remaining = copy.deepcopy(planned_profiles)
+    removed: list[Any] = []
+    for profile in existing_profiles:
+        for index, planned_profile in enumerate(remaining):
+            if profile == planned_profile:
+                del remaining[index]
+                break
+        else:
+            removed.append(copy.deepcopy(profile))
+    return removed
+
+
+def build_replace_all_plan(candidates: list[Candidate], existing_profiles: list[Any]) -> ProfilePlan:
+    planned_profiles: list[Any] = []
+    existing_by_id: dict[str, list[Any]] = {}
+    for profile in existing_profiles:
+        if isinstance(profile, dict):
+            identifier = normal_string(profile.get("id"))
+            if identifier is not None:
+                existing_by_id.setdefault(identifier, []).append(profile)
+
+    added: list[str] = []
+    replaced: list[str] = []
+    for candidate in candidates:
+        assert candidate.profile is not None
+        assert candidate.identifier is not None
+        planned_profiles.append(copy.deepcopy(candidate.profile))
+        previous_versions = existing_by_id.get(candidate.identifier, [])
+        if not previous_versions:
+            added.append(candidate.identifier)
+        elif all(candidate.profile != profile for profile in previous_versions):
+            replaced.append(candidate.identifier)
+
+    return ProfilePlan(
+        profiles=planned_profiles,
+        added=added,
+        replaced=replaced,
+        removed=profiles_removed_by_plan(existing_profiles, planned_profiles),
+    )
+
+
+def normalize_delete_identifiers(values: Sequence[str], problems: Problems) -> list[str]:
+    identifiers: list[str] = []
+    for index, value in enumerate(values):
+        identifier = normal_string(value)
+        if identifier is None:
+            problems.error(
+                "DELETE_ID",
+                "--delete ID는 비어 있지 않은 문자열이어야 합니다.",
+                f"--delete[{index}]",
+            )
+        elif identifier not in identifiers:
+            identifiers.append(identifier)
+    return identifiers
+
+
+def build_delete_plan(
+    identifiers: Sequence[str], existing_profiles: list[Any], problems: Problems
+) -> ProfilePlan | None:
+    matches_by_id: dict[str, list[tuple[int, Any]]] = {}
+    for index, profile in enumerate(existing_profiles):
+        if isinstance(profile, dict):
+            identifier = normal_string(profile.get("id"))
+            if identifier is not None:
+                matches_by_id.setdefault(identifier, []).append((index, profile))
+
+    matches: list[tuple[int, Any]] = []
+    for identifier in identifiers:
+        candidates = matches_by_id.get(identifier, [])
+        if not candidates:
+            problems.error("DELETE_NOT_FOUND", f"id {identifier!r}인 기존 프로필이 없습니다.", "--delete")
+        elif len(candidates) != 1:
+            problems.error(
+                "DELETE_AMBIGUOUS",
+                f"id {identifier!r}인 기존 프로필이 {len(candidates)}개여서 하나만 삭제할 수 없습니다.",
+                "--delete",
+            )
+        else:
+            matches.append(candidates[0])
+    if problems.errors:
+        return None
+
+    matched_indices = {index for index, _ in matches}
+    planned_profiles = [
+        copy.deepcopy(profile)
+        for index, profile in enumerate(existing_profiles)
+        if index not in matched_indices
+    ]
+    removed = [
+        copy.deepcopy(profile)
+        for index, profile in enumerate(existing_profiles)
+        if index in matched_indices
+    ]
+    return ProfilePlan(profiles=planned_profiles, added=[], replaced=[], removed=removed)
+
+
+def plan_changes(
+    plan: ProfilePlan, requested: int, existing_profiles: list[Any]
+) -> dict[str, Any]:
+    return {
+        "requested": requested,
+        "add": plan.added,
+        "replace": plan.replaced,
+        "remove": copy.deepcopy(plan.removed),
+        "finalArrayLength": len(plan.profiles),
+        "wouldChange": plan.profiles != existing_profiles,
+    }
 
 
 def document_with_profiles(document: Mapping[str, Any], profiles: list[Any]) -> dict[str, Any]:
@@ -1027,14 +1364,14 @@ def wait_for_reload_logs(log_path: Path, baseline_line_count: int) -> dict[str, 
 
 def reload_and_verify(log_path: Path | None) -> dict[str, Any]:
     result: dict[str, Any] = {"attempted": True, "command": None, "log": None, "ok": False}
+    baseline: int | None = None
     if log_path is None:
         result["log"] = {"ok": False, "errorMessages": ["paseo status의 logPath가 없습니다."]}
-        return result
-    try:
-        baseline = len(log_lines(log_path))
-    except (OSError, ValueError) as exc:
-        result["log"] = {"ok": False, "errorMessages": [f"reload 전 daemon log를 읽을 수 없습니다: {exc}"]}
-        return result
+    else:
+        try:
+            baseline = len(log_lines(log_path))
+        except (OSError, ValueError) as exc:
+            result["log"] = {"ok": False, "errorMessages": [f"reload 전 daemon log를 읽을 수 없습니다: {exc}"]}
 
     try:
         command = run_paseo(("daemon", "reload"))
@@ -1043,28 +1380,29 @@ def reload_and_verify(log_path: Path | None) -> dict[str, Any]:
         return result
     expected_stdout = "Configuration reloaded."
     stdout = command.stdout.strip()
-    stdout_ok = stdout == expected_stdout
+    # The CLI may append restart warnings after its success line, so stdout only confirms success text.
+    stdout_ok = expected_stdout in stdout
+    # The CLI exit status is authoritative; stdout is only supplementary confirmation.
     result["command"] = {
-        "ok": command.returncode == 0 and stdout_ok,
+        "ok": command.returncode == 0,
         "returnCode": command.returncode,
         "stdout": stdout,
         "stderr": command.stderr.strip(),
         "expectedStdout": expected_stdout,
+        "successMessageFound": stdout_ok,
     }
-    result["log"] = wait_for_reload_logs(log_path, baseline)
     if command.returncode != 0:
+        if result["log"] is None:
+            result["log"] = {"ok": False, "errorMessages": []}
         result["log"]["ok"] = False
         result["log"]["errorMessages"] = list(result["log"].get("errorMessages", [])) + [
             "paseo daemon reload 명령이 실패했습니다."
         ]
         return result
-    if not stdout_ok:
-        result["log"]["ok"] = False
-        result["log"]["errorMessages"] = list(result["log"].get("errorMessages", [])) + [
-            "paseo daemon reload stdout이 'Configuration reloaded.'와 일치하지 않습니다."
-        ]
-        return result
-    result["ok"] = bool(result["log"].get("ok"))
+    if baseline is not None and log_path is not None:
+        result["log"] = wait_for_reload_logs(log_path, baseline)
+    # Daemon logs are diagnostic only: concurrent unrelated entries must not roll back a successful CLI reload.
+    result["ok"] = True
     return result
 
 
@@ -1075,6 +1413,7 @@ def restore_backup_and_reload(
         "attempted": True,
         "backupPath": path_text(backup_path),
         "restored": False,
+        "restoredAgentProfilesCount": None,
         "reparse": False,
         "reload": None,
         "ok": False,
@@ -1082,7 +1421,14 @@ def restore_backup_and_reload(
     try:
         backup = load_json_snapshot(backup_path, "복원 백업")
         validate_problems = Problems()
-        if validate_config_document(backup.document, "복원 백업", validate_problems, backup_path) is None:
+        backup_profiles = validate_config_document(
+            backup.document,
+            "복원 백업",
+            validate_problems,
+            backup_path,
+            allow_missing_agent_profiles=True,
+        )
+        if backup_profiles is None:
             result["error"] = validate_problems.errors
             return result
         atomic_write_bytes(config_path, backup.raw)
@@ -1092,6 +1438,7 @@ def restore_backup_and_reload(
         if not result["restored"]:
             result["error"] = "복원된 config.json의 바이트가 백업과 다릅니다."
             return result
+        result["restoredAgentProfilesCount"] = len(backup_profiles)
         result["reload"] = reload_and_verify(log_path)
         result["ok"] = bool(result["reload"].get("ok"))
         return result
@@ -1146,7 +1493,7 @@ def apply_profile_plan(
 
         result["reload"] = reload_and_verify(log_path)
         if not result["reload"].get("ok"):
-            raise RuntimeError("paseo daemon reload 또는 신규 daemon log 검증에 실패했습니다.")
+            raise RuntimeError("paseo daemon reload 명령이 실패했습니다.")
         result["ok"] = True
         return result
     except (OSError, ValueError, RuntimeError, TypeError) as exc:
@@ -1171,6 +1518,7 @@ def apply_explicit_rollback(
         "safetyBackupPath": None,
         "identity": {"beforeSha256": current.sha256, "rechecked": False},
         "restored": False,
+        "restoredAgentProfilesCount": None,
         "reparse": False,
         "reload": None,
         "recovery": None,
@@ -1195,16 +1543,24 @@ def apply_explicit_rollback(
         restored = load_json_snapshot(config_path, "복원된 config.json")
         result["reparse"] = True
         restoration_problems = Problems()
-        if validate_config_document(restored.document, "복원된 config.json", restoration_problems, config_path) is None:
+        restored_profiles = validate_config_document(
+            restored.document,
+            "복원된 config.json",
+            restoration_problems,
+            config_path,
+            allow_missing_agent_profiles=True,
+        )
+        if restored_profiles is None:
             for error in restoration_problems.errors:
                 problems.errors.append(error)
             raise RuntimeError("복원된 config.json 구조 검증에 실패했습니다.")
         if restored.raw != requested_backup.raw:
             raise RuntimeError("복원된 config.json의 바이트가 지정 백업과 다릅니다.")
+        result["restoredAgentProfilesCount"] = len(restored_profiles)
 
         result["reload"] = reload_and_verify(log_path)
         if not result["reload"].get("ok"):
-            raise RuntimeError("rollback 뒤 paseo daemon reload 또는 신규 daemon log 검증에 실패했습니다.")
+            raise RuntimeError("rollback 뒤 paseo daemon reload 명령이 실패했습니다.")
         result["ok"] = True
         return result
     except (OSError, ValueError, RuntimeError, TypeError) as exc:
@@ -1250,7 +1606,7 @@ def emit_human_summary(result: Mapping[str, Any]) -> None:
         )
         change_text = (
             f" 요청 {changes.get('requested', 0)}건, 추가 {len(changes.get('add', []))}건, "
-            f"교체 {len(changes.get('replace', []))}건.{final_length_text}"
+            f"교체 {len(changes.get('replace', []))}건, 삭제 {len(changes.get('remove', []))}건.{final_length_text}"
         )
     stderr_line(
         f"Paseo 프로필 관리: {result.get('action', 'unknown')}; "
@@ -1266,6 +1622,90 @@ def emit_human_summary(result: Mapping[str, Any]) -> None:
         stderr_line(f"경고{location}: {message}")
 
 
+def human_profile_value(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value if value.strip() else None
+    return json.dumps(value, ensure_ascii=False, allow_nan=False)
+
+
+def combined_profile_value(profile: Mapping[str, Any], keys: Sequence[str], separator: str) -> str | None:
+    values = [human_profile_value(profile.get(key)) for key in keys]
+    present = [value for value in values if value is not None]
+    return separator.join(present) if present else None
+
+
+def single_line_profile_value(value: Any) -> str | None:
+    text = human_profile_value(value)
+    if text is None:
+        return None
+    return text.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
+
+
+def emit_human_profile_list(profiles: list[Any], detail: bool) -> None:
+    profile_mappings = [profile if isinstance(profile, Mapping) else {} for profile in profiles]
+    lines = [f"Paseo 에이전트 프로필 {len(profiles)}건"]
+    if profile_mappings:
+        lines.append("")
+    if not profile_mappings:
+        pass
+    elif detail:
+        for index, profile in enumerate(profile_mappings, start=1):
+            if index > 1:
+                lines.append("")
+            title = combined_profile_value(profile, ("id", "name"), " · ") or "-"
+            details = (
+                combined_profile_value(profile, ("provider", "model"), "/"),
+                human_profile_value(profile.get("thinkingOptionId")),
+                human_profile_value(profile.get("modeId")),
+                combined_profile_value(profile, ("icon", "color"), "/"),
+            )
+            lines.append(f"[{index}] {title}")
+            rendered_details = [value for value in details if value is not None]
+            if rendered_details:
+                lines.append(f"    {' · '.join(rendered_details)}")
+            notes = human_profile_value(profile.get("notes"))
+            if notes is not None:
+                lines.extend(f"    {line}" for line in notes.splitlines() or [""])
+    else:
+        identifiers = [human_profile_value(profile.get("id")) or "-" for profile in profile_mappings]
+        number_width = len(str(len(profile_mappings)))
+        id_width = max(len(identifier) for identifier in identifiers)
+        for index, (profile, identifier) in enumerate(zip(profile_mappings, identifiers), start=1):
+            if index > 1:
+                lines.append("")
+            details = (
+                combined_profile_value(profile, ("provider", "model"), "/"),
+                human_profile_value(profile.get("thinkingOptionId")),
+                human_profile_value(profile.get("modeId")),
+            )
+            rendered_details = [value for value in details if value is not None]
+            first_line = f"{index:>{number_width}}  {identifier:<{id_width}}"
+            if rendered_details:
+                first_line += f"  {' · '.join(rendered_details)}"
+            lines.append(first_line)
+
+            label = " · ".join(
+                value
+                for value in (
+                    human_profile_value(profile.get("name")),
+                    single_line_profile_value(profile.get("notes")),
+                )
+                if value is not None
+            )
+            emoji = ICON_EMOJI.get(human_profile_value(profile.get("icon")), DEFAULT_PROFILE_ICON_EMOJI)
+            lines.append(f"    {emoji}" + (f" {label}" if label else ""))
+    payload = ("\n".join(lines) + "\n").encode("utf-8")
+    stream = getattr(sys.stdout, "buffer", None)
+    if stream is not None:
+        stream.write(payload)
+        stream.flush()
+    else:
+        sys.stdout.write(payload.decode("utf-8"))
+        sys.stdout.flush()
+
+
 def base_result(args: argparse.Namespace | None) -> dict[str, Any]:
     return {
         "ok": False,
@@ -1275,7 +1715,8 @@ def base_result(args: argparse.Namespace | None) -> dict[str, Any]:
         "applyRequested": bool(args and args.apply),
         "configPath": None,
         "input": None,
-        "changes": {"requested": 0, "add": [], "replace": [], "finalArrayLength": None},
+        "profiles": None,
+        "changes": {"requested": 0, "add": [], "replace": [], "remove": [], "finalArrayLength": None},
         "backupPath": None,
         "reload": None,
         "errors": [],
@@ -1293,11 +1734,71 @@ def finish(result: dict[str, Any], problems: Problems, exit_code: int) -> int:
     return exit_code
 
 
+def emit_list_diagnostics(result: Mapping[str, Any]) -> None:
+    for item in result.get("errors", []):
+        location = f" [{item['path']}]" if isinstance(item, dict) and item.get("path") else ""
+        message = item.get("message", str(item)) if isinstance(item, dict) else str(item)
+        stderr_line(f"오류{location}: {message}")
+    for item in result.get("warnings", []):
+        location = f" [{item['path']}]" if isinstance(item, dict) and item.get("path") else ""
+        message = item.get("message", str(item)) if isinstance(item, dict) else str(item)
+        stderr_line(f"경고{location}: {message}")
+
+
+def finish_list(
+    result: dict[str, Any], problems: Problems, exit_code: int, json_output: bool, detail: bool
+) -> int:
+    result["errors"] = problems.errors
+    result["warnings"] = problems.warnings
+    result["exitCode"] = exit_code
+    result["ok"] = exit_code == EXIT_OK
+    if json_output:
+        emit_json(result)
+    elif exit_code == EXIT_OK:
+        profiles = result.get("profiles")
+        assert isinstance(profiles, list)
+        emit_human_profile_list(profiles, detail)
+    if result["errors"] or result["warnings"]:
+        emit_list_diagnostics(result)
+    return exit_code
+
+
 def resolve_argument_state(args: argparse.Namespace, problems: Problems) -> tuple[str | None, Path | None]:
-    if args.rollback is not None and args.input_path is not None:
-        problems.error("ARGUMENT", "--rollback은 프로필 INPUT과 함께 사용할 수 없습니다.")
+    exclusive_actions = (
+        ("--rollback", args.rollback is not None),
+        ("--list", args.list_profiles),
+        ("--delete", args.delete is not None),
+        ("--replace-all", args.replace_all),
+    )
+    selected_actions = [name for name, selected in exclusive_actions if selected]
+    if len(selected_actions) > 1:
+        problems.error("ARGUMENT", f"{', '.join(selected_actions)}은 함께 사용할 수 없습니다.")
+    if (args.rollback is not None or args.list_profiles or args.delete is not None) and args.input_path is not None:
+        problems.error("ARGUMENT", "--rollback, --list, --delete는 프로필 INPUT과 함께 사용할 수 없습니다.")
     if args.rollback is not None and args.update:
         problems.error("ARGUMENT", "--rollback과 --update는 함께 사용할 수 없습니다.")
+    if args.update and (args.list_profiles or args.delete is not None or args.replace_all):
+        problems.error("ARGUMENT", "--update는 일반 프로필 추가/교체 입력에만 사용할 수 있습니다.")
+    if args.list_profiles and args.apply:
+        problems.error("ARGUMENT", "--list는 읽기 전용이므로 --apply와 함께 사용할 수 없습니다.")
+    if args.json and not args.list_profiles:
+        problems.error("ARGUMENT", "--json은 --list와 함께 사용할 수 있습니다.")
+    if args.detail and not args.list_profiles:
+        problems.error("ARGUMENT", "--detail은 --list와 함께 사용할 수 있습니다.")
+    if args.modes_file is not None and (args.rollback is not None or args.list_profiles or args.delete is not None):
+        problems.error("ARGUMENT", "--modes-file은 프로필 추가, --update, --replace-all에만 사용할 수 있습니다.")
+    if (
+        args.apply
+        and args.modes_file is None
+        and args.rollback is None
+        and not args.list_profiles
+        and args.delete is None
+    ):
+        problems.error(
+            "MODES_FILE_REQUIRED",
+            "--apply에는 권한 modeId를 검증할 --modes-file이 필요합니다. "
+            "MCP에서 실시간 조회한 provider별 modeIds와 defaultMode를 담은 JSON을 지정하세요.",
+        )
     source = args.input_path
     if source is None:
         source = "-"
@@ -1322,7 +1823,11 @@ def execute_rollback(
     requested_backup = load_snapshot_safely(Path(args.rollback), "지정 rollback 백업", problems)
     if requested_backup is not None:
         validate_config_document(
-            requested_backup.document, "지정 rollback 백업", problems, requested_backup.path
+            requested_backup.document,
+            "지정 rollback 백업",
+            problems,
+            requested_backup.path,
+            allow_missing_agent_profiles=True,
         )
         # Valid JSON with a daemon.agentProfiles array is not evidence that the
         # file belongs to this config.  Restoring an unrelated file would
@@ -1366,60 +1871,29 @@ def execute_rollback(
     return finish(result, problems, EXIT_APPLY_FAILURE)
 
 
-def execute_profiles(
+def execute_profile_plan(
     args: argparse.Namespace,
     result: dict[str, Any],
     problems: Problems,
     runtime: RuntimePaths,
-    config_path: Path | None,
-    source: str,
+    config_path: Path,
+    config_snapshot: JsonSnapshot,
+    existing_profiles: list[Any],
+    plan: ProfilePlan,
+    requested: int,
+    *,
+    dry_run_action: str,
+    applied_action: str,
+    failed_action: str,
+    no_op_action: str,
 ) -> int:
-    result["input"] = "stdin" if source == "-" else source
-    result["configPath"] = path_text(config_path)
-    profiles = load_input_profiles(source, problems)
-    if config_path is None:
-        problems.error("CONFIG_PATH", "paseo status의 home 또는 --config가 필요합니다.")
-    config_snapshot = (
-        load_snapshot_safely(config_path, "config.json", problems) if config_path is not None else None
-    )
-    existing_profiles = (
-        validate_config_document(config_snapshot.document, "config.json", problems, config_path)
-        if config_snapshot is not None
-        else None
-    )
-
-    candidates: list[Candidate] = []
-    if profiles is not None:
-        result["changes"]["requested"] = len(profiles)
-        candidates = validate_profile_shape(profiles, problems)
-        validate_batch_duplicates(candidates, problems)
-
-    provider_inventory = list_providers(problems)
-    if profiles is not None:
-        validate_provider_model_and_thinking(candidates, provider_inventory, problems)
-    # Run even when other fields already failed: one run reports every
-    # collision error before any --apply is considered.
-    validate_conflicts(candidates, existing_profiles, args.update, problems)
-
-    if problems.errors:
-        return finish(result, problems, EXIT_VALIDATION_ERROR)
-    assert config_snapshot is not None
-    assert existing_profiles is not None
-    plan = build_profile_plan(candidates, existing_profiles, args.update)
-    result["changes"] = {
-        "requested": len(candidates),
-        "add": plan.added,
-        "replace": plan.replaced,
-        "finalArrayLength": len(plan.profiles),
-        "wouldChange": plan.profiles != existing_profiles,
-    }
-
+    result["changes"] = plan_changes(plan, requested, existing_profiles)
     if not args.apply:
-        result["action"] = "dry-run"
+        result["action"] = dry_run_action
         return finish(result, problems, EXIT_OK)
 
     if plan.profiles == existing_profiles:
-        result["action"] = "no-op"
+        result["action"] = no_op_action
         return finish(result, problems, EXIT_OK)
 
     planned_document = document_with_profiles(config_snapshot.document, plan.profiles)
@@ -1435,10 +1909,167 @@ def execute_profiles(
     result["backupPath"] = operation.get("backupPath")
     result["reload"] = operation.get("reload")
     if operation.get("ok"):
-        result["action"] = "applied"
+        result["action"] = applied_action
         return finish(result, problems, EXIT_OK)
-    result["action"] = "apply-failed"
+    result["action"] = failed_action
     return finish(result, problems, EXIT_APPLY_FAILURE)
+
+
+def execute_list(
+    args: argparse.Namespace,
+    result: dict[str, Any],
+    problems: Problems,
+    config_path: Path | None,
+) -> int:
+    result["input"] = None
+    result["configPath"] = path_text(config_path)
+    if config_path is None:
+        problems.error("CONFIG_PATH", "paseo status의 home 또는 --config가 필요합니다.")
+        return finish_list(result, problems, EXIT_VALIDATION_ERROR, args.json, args.detail)
+
+    config_snapshot = load_snapshot_safely(config_path, "config.json", problems)
+    existing_profiles = (
+        list_profiles_from_config(config_snapshot.document, "config.json", problems, config_path)
+        if config_snapshot is not None
+        else None
+    )
+    if problems.errors:
+        return finish_list(result, problems, EXIT_VALIDATION_ERROR, args.json, args.detail)
+
+    assert existing_profiles is not None
+    result["profiles"] = copy.deepcopy(existing_profiles)
+    result["action"] = "listed"
+    return finish_list(result, problems, EXIT_OK, args.json, args.detail)
+
+
+def execute_delete(
+    args: argparse.Namespace,
+    result: dict[str, Any],
+    problems: Problems,
+    runtime: RuntimePaths,
+    config_path: Path | None,
+) -> int:
+    result["input"] = None
+    result["configPath"] = path_text(config_path)
+    assert isinstance(args.delete, list)
+    identifiers = normalize_delete_identifiers(args.delete, problems)
+    if config_path is None:
+        problems.error("CONFIG_PATH", "paseo status의 home 또는 --config가 필요합니다.")
+    config_snapshot = (
+        load_snapshot_safely(config_path, "config.json", problems) if config_path is not None else None
+    )
+    existing_profiles = (
+        validate_config_document(
+            config_snapshot.document,
+            "config.json",
+            problems,
+            config_path,
+            allow_missing_agent_profiles=True,
+        )
+        if config_snapshot is not None
+        else None
+    )
+    if problems.errors:
+        return finish(result, problems, EXIT_VALIDATION_ERROR)
+
+    assert identifiers
+    assert config_path is not None
+    assert config_snapshot is not None
+    assert existing_profiles is not None
+    plan = build_delete_plan(identifiers, existing_profiles, problems)
+    if problems.errors:
+        return finish(result, problems, EXIT_VALIDATION_ERROR)
+    assert plan is not None
+    return execute_profile_plan(
+        args,
+        result,
+        problems,
+        runtime,
+        config_path,
+        config_snapshot,
+        existing_profiles,
+        plan,
+        len(identifiers),
+        dry_run_action="delete-dry-run",
+        applied_action="deleted",
+        failed_action="delete-failed",
+        no_op_action="delete-no-op",
+    )
+
+
+def execute_profiles(
+    args: argparse.Namespace,
+    result: dict[str, Any],
+    problems: Problems,
+    runtime: RuntimePaths,
+    config_path: Path | None,
+    source: str,
+) -> int:
+    result["input"] = "stdin" if source == "-" else source
+    result["configPath"] = path_text(config_path)
+    profiles = load_input_profiles(source, problems, require_array=args.replace_all)
+    if config_path is None:
+        problems.error("CONFIG_PATH", "paseo status의 home 또는 --config가 필요합니다.")
+    config_snapshot = (
+        load_snapshot_safely(config_path, "config.json", problems) if config_path is not None else None
+    )
+    existing_profiles = (
+        validate_config_document(
+            config_snapshot.document,
+            "config.json",
+            problems,
+            config_path,
+            allow_missing_agent_profiles=True,
+        )
+        if config_snapshot is not None
+        else None
+    )
+
+    candidates: list[Candidate] = []
+    if profiles is not None:
+        result["changes"]["requested"] = len(profiles)
+        candidates = validate_profile_shape(profiles, problems)
+        validate_batch_duplicates(candidates, problems)
+
+    mode_catalog = load_mode_catalog(Path(args.modes_file), problems) if args.modes_file is not None else None
+    provider_inventory = list_providers(problems)
+    if profiles is not None:
+        validate_provider_model_and_thinking(
+            candidates,
+            provider_inventory,
+            mode_catalog,
+            args.modes_file is None,
+            problems,
+        )
+    if not args.replace_all:
+        # Run even when other fields already failed: one run reports every
+        # collision error before any --apply is considered.
+        validate_conflicts(candidates, existing_profiles, args.update, problems)
+
+    if problems.errors:
+        return finish(result, problems, EXIT_VALIDATION_ERROR)
+    assert config_snapshot is not None
+    assert existing_profiles is not None
+    plan = (
+        build_replace_all_plan(candidates, existing_profiles)
+        if args.replace_all
+        else build_profile_plan(candidates, existing_profiles, args.update)
+    )
+    return execute_profile_plan(
+        args,
+        result,
+        problems,
+        runtime,
+        config_path,
+        config_snapshot,
+        existing_profiles,
+        plan,
+        len(candidates),
+        dry_run_action="replace-all-dry-run" if args.replace_all else "dry-run",
+        applied_action="replace-all-applied" if args.replace_all else "applied",
+        failed_action="replace-all-failed" if args.replace_all else "apply-failed",
+        no_op_action="replace-all-no-op" if args.replace_all else "no-op",
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1453,6 +2084,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     problems = Problems()
     result = base_result(args)
     source, config_override = resolve_argument_state(args, problems)
+    if problems.errors:
+        return finish(result, problems, EXIT_VALIDATION_ERROR)
 
     # Status is read-only.  Its home/logPath are the only runtime path source;
     # --config deliberately overrides only the config target for tests.
@@ -1477,6 +2110,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.rollback is not None:
         return execute_rollback(args, result, problems, runtime, config_path)
+    if args.list_profiles:
+        return execute_list(args, result, problems, config_path)
+    if args.delete is not None:
+        return execute_delete(args, result, problems, runtime, config_path)
+    assert source is not None
     return execute_profiles(args, result, problems, runtime, config_path, source)
 
 
