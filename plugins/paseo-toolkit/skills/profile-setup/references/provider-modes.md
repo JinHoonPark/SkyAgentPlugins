@@ -40,7 +40,7 @@ MCP를 쓸 수 없는 상황이면 확신할 수 있는 mode는 `defaultMode` �
 
 - grok의 mode 목록은 조사되지 않았다. 추측해 채우지 말고 `list_providers` 또는
   `inspect_provider`로 확인한다.
-- `scripts/manage_profiles.py`의 검증용 스냅샷 상수 `KNOWN_MODE_IDS`에는 claude와 codex
+- `../../scripts/manage_profiles.py`의 검증용 스냅샷 상수 `KNOWN_MODE_IDS`에는 claude와 codex
   두 provider만 있다. 여기 없는 provider는 `defaultMode`가 아닌 모든 값에
   `MODE_UNVERIFIED` **경고**를 받는다. 차단은 아니므로 `--apply`는 통과한다.
 
@@ -61,7 +61,7 @@ MCP를 쓸 수 없는 상황이면 확신할 수 있는 mode는 `defaultMode` �
 - codex `full-access`는 **네트워크 접근과 무제한 실행**을 준다. 명령 실행 자체가 목적인
   프로필에만 붙인다. 조사·검색처럼 읽기만 하는 프로필에는 쓰기 권한도 기본으로 주지 않는다.
 - claude `plan`은 코드 수정과 도구 실행을 막아 **문서 산출까지 막는다.** 파일을 만들어야
-  하는 프로필에 쓰지 않는다. `scripts/manage_profiles.py`가 `CLAUDE_PLAN` 경고를 낸다.
+  하는 프로필에 쓰지 않는다. `../../scripts/manage_profiles.py`가 `CLAUDE_PLAN` 경고를 낸다.
 
 ## 활성 provider
 
@@ -106,7 +106,7 @@ MCP를 쓸 수 없는 상황이면 확신할 수 있는 mode는 `defaultMode` �
 **Haiku 4.5와 `opus[1m]`에는 `thinkingOptionId`를 넣지 않는다. 필드 자체를 생략한다.**
 빈 문자열도 `off`도 안 된다. 이 두 모델에는 유효한 값이 하나도 없다.
 
-`scripts/manage_profiles.py`는 모델의 `thinkingOptionIds`에 없는 값을 **경고가 아니라
+`../../scripts/manage_profiles.py`는 모델의 `thinkingOptionIds`에 없는 값을 **경고가 아니라
 오류(`THINKING`)로 막는다.** 오류가 하나라도 있으면 `--apply`가 프로필 전체를 쓰지 않는다.
 
 같은 이유로 아래도 전부 오류다.

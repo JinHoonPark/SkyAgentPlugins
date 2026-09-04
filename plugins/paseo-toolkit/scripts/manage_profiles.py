@@ -541,6 +541,8 @@ def run_paseo_json(
 def discover_runtime_paths(
     problems: Problems, *, require_home: bool, require_log_path: bool
 ) -> RuntimePaths:
+    if not require_home and not require_log_path:
+        return RuntimePaths(home=None, log_path=None)
     status = run_paseo_json(("status", "--json"), "paseo status --json", problems)
     if not isinstance(status, dict):
         if status is not None:
@@ -2091,7 +2093,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     # --config deliberately overrides only the config target for tests.
     runtime = discover_runtime_paths(
         problems,
-        require_home=True,
+        require_home=config_override is None,
         require_log_path=args.apply,
     )
     config_path = config_override

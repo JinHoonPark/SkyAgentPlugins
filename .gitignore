@@ -1,4 +1,4 @@
-# 개발 중 스킬 로딩용 junction (AGENTS.md §6). codex 마켓플레이스 매니페스트만 예외로 추적한다.
+# claude·codex의 로컬 작업 디렉터리는 추적하지 않는다. codex 마켓플레이스 매니페스트만 예외로 추적한다.
 /.claude/
 /.agents/*
 !/.agents/plugins/

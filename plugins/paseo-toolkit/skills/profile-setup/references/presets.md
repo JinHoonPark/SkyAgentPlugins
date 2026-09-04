@@ -129,7 +129,7 @@ provider별 mode 값과 모델별 thinking 옵션의 생김새는 [`provider-mod
 | `search` | 검색·조사 | 저성능 | 읽기·확인 | search / sky |
 | `run-command` | 명령어 실행 | 저성능 | 명령 전권 | terminal / sky |
 
-`notes`는 전부 64~75자다. `scripts/manage_profiles.py`의 `MAX_NOTES_UNICODE_CHARS`
+`notes`는 전부 64~75자다. `../../scripts/manage_profiles.py`의 `MAX_NOTES_UNICODE_CHARS`
 (160자를 넘으면 경고) 안에 있다. 사용자가 문구를 고칠 때도 이 한도를 넘기지 않는다.
 
 ### `team-lead` — 팀장

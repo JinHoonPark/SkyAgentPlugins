@@ -19,7 +19,7 @@ Paseo 프로필은 사람이 정한 시작 구성 묶음이다. 팀장(오케스
 - `featureValues` → `settings.features` (이름이 다르다)
 
 설정 파일을 직접 고치지 않는다. 검증·백업·반영·reload·실패 시 롤백은 전부
-[`scripts/manage_profiles.py`](scripts/manage_profiles.py)가 처리한다. 전용
+[`../../scripts/manage_profiles.py`](../../scripts/manage_profiles.py)가 처리한다. 전용
 `paseo profile ...` CLI 명령은 없다.
 
 ## 진입 분기
@@ -45,7 +45,7 @@ Paseo 프로필은 사람이 정한 시작 구성 묶음이다. 팀장(오케스
 무엇을 하러 왔든 먼저 실행한다.
 
 ```powershell
-python scripts/manage_profiles.py --list
+python ../../scripts/manage_profiles.py --list
 ```
 
 `--list`가 프로필을 하나도 출력하지 않거나 `agentProfiles`가 없다/비었다는 취지의 오류로
@@ -277,10 +277,10 @@ $modes = Join-Path $env:TEMP 'paseo-modes.json'
 
 ```powershell
 # 검증만 한다. 기본값이며 어떤 파일도 만들거나 바꾸지 않는다.
-python scripts/manage_profiles.py profiles.json --modes-file $modes
+python ../../scripts/manage_profiles.py profiles.json --modes-file $modes
 
 # 검증이 통과하면 적용한다.
-python scripts/manage_profiles.py profiles.json --modes-file $modes --apply
+python ../../scripts/manage_profiles.py profiles.json --modes-file $modes --apply
 ```
 
 dry-run이 오류 없이 끝나는 것을 먼저 확인하고 `--apply`를 붙인다. 오류가 하나라도 있으면
@@ -330,8 +330,8 @@ dry-run이 오류 없이 끝나는 것을 먼저 확인하고 `--apply`를 붙�
 경로이고, 변경도 `--apply` 전에 그 파일이 있어야 한다.
 
 ```powershell
-python scripts/manage_profiles.py profile.json --update --modes-file $modes
-python scripts/manage_profiles.py profile.json --update --modes-file $modes --apply
+python ../../scripts/manage_profiles.py profile.json --update --modes-file $modes
+python ../../scripts/manage_profiles.py profile.json --update --modes-file $modes --apply
 ```
 
 ## 4. 삭제와 전체 교체
@@ -342,10 +342,10 @@ python scripts/manage_profiles.py profile.json --update --modes-file $modes --ap
 
 ```powershell
 # 하나 이상의 id를 한 번에 지운다. INPUT과 --modes-file 모두 함께 쓸 수 없다.
-python scripts/manage_profiles.py --delete search run-command
+python ../../scripts/manage_profiles.py --delete search run-command
 
 # INPUT 배열로 기존 배열 전체를 교체한다. $modes는 2절에서 만든 경로다.
-python scripts/manage_profiles.py profiles.json --replace-all --modes-file $modes
+python ../../scripts/manage_profiles.py profiles.json --replace-all --modes-file $modes
 ```
 
 **승인 게이트를 반드시 통과시킨다.** dry-run 결과 JSON의 `changes.remove`에 사라질 원본

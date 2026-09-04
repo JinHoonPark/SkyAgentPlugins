@@ -32,12 +32,12 @@ description: Paseo 에이전트 프로필이 의도대로 동작하는지 실제
 
 ### 1. 대상 고르기
 
-현재 프로필 목록을 보여준다. 목록 출력은 `profile-setup`의 스크립트가 단일 원천이다.
+현재 프로필 목록을 보여준다. 목록 출력은 `../../scripts/manage_profiles.py`가 단일 원천이다.
 서식을 새로 그리지 말고 그 출력을 그대로 보여준다.
 
 ```bash
 # 스킬 디렉터리 기준 상대 경로다.
-python ../profile-setup/scripts/manage_profiles.py --list
+python ../../scripts/manage_profiles.py --list
 ```
 
 호출 전에 `--help`로 실제 인자를 확인한다. 그 스크립트는 이 스킬과 따로 개정되므로
@@ -53,7 +53,7 @@ python ../profile-setup/scripts/manage_profiles.py --list
 거부하고 사용 가능한 id를 보여주므로 그 출력을 그대로 쓰면 된다.
 
 ```bash
-python ../profile-setup/scripts/manage_profiles.py --list --json > disk.json
+python ../../scripts/manage_profiles.py --list --json > disk.json
 # daemon.json 은 MCP list_profiles 결과를 저장한 파일이다.
 python scripts/testrun_ledger.py init --daemon daemon.json --disk disk.json --state state.json
 python scripts/testrun_ledger.py init --daemon daemon.json --disk disk.json --state state.json --only explore,review
@@ -335,7 +335,7 @@ FAIL  PASS    N/A    run-command   ⌨️ 명령 실행
 점수를 되짚을 수 없기 때문이다.
 
 프로필 이름 앞 이모지는 프로필의 `icon` 필드에서 온다. 매핑은
-`../profile-setup/scripts/manage_profiles.py`의 `ICON_EMOJI`가 원본이고 렌더러가 그 파일에서
+공용 `manage_profiles.py`의 `ICON_EMOJI`가 원본이고 렌더러가 그 파일에서
 직접 읽으므로, 같은 프로필이 두 스킬에서 다른 이모지로 보이지 않는다. `icon`이 없거나
 매핑에 없으면 기본 이모지(`🔹`)로 채운다. 비워 두면 정렬이 어긋난다.
 

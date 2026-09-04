@@ -54,10 +54,10 @@ def clamp_concurrency(value, *, quiet: bool = False) -> int:
 ITEM_WIDTH = 34
 EVIDENCE_WIDTH = 40
 
-# icon → 이모지 매핑은 profile-setup의 manage_profiles.py가 원본이다. 같은 프로필이
+# icon → 이모지 매핑은 플러그인 공용 manage_profiles.py가 원본이다. 같은 프로필이
 # 두 스킬에서 다른 이모지로 보이면 안 되므로 값을 베끼지 않고 그 파일에서 읽어온다.
-MAPPING_SOURCE = (Path(__file__).resolve().parents[2]
-                  / "profile-setup" / "scripts" / "manage_profiles.py")
+MAPPING_SOURCE = (Path(__file__).resolve().parents[3]
+                  / "scripts" / "manage_profiles.py")
 # 심판 프롬프트에 실을 루브릭의 원천. 이 스킬 안의 참조 문서다.
 BRIEF_DOC = Path(__file__).resolve().parent.parent / "references" / "judge-brief.md"
 FALLBACK_ICON_EMOJI = {"search": "🔍", "flask": "🧪", "eye": "👁️", "code": "💻",
