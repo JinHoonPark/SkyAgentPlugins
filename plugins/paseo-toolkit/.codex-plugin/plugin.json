@@ -1,6 +1,6 @@
 {
   "name": "paseo-toolkit",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Operate the Paseo CLI and daemon: configure agent profiles and report the results.",
   "author": {
     "name": "Sky"
