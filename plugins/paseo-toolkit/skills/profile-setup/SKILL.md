@@ -145,7 +145,7 @@ presets.md의 프리셋 7종(팀장 / 설계 / 분석 / 검토 / 작업 / 검색
 | `name` | 자동 파생 | 1턴 답을 그대로 표시명으로 쓴다. |
 | `provider` | 자동 파생 | 2턴에서 고른 모델이 속한 provider. 따로 묻지 않는다 — 모델을 고르면 정해진다. |
 | `model` | **묻는다 (2턴)** | 활성 provider의 `list_models` 결과만 선택지로 낸다. |
-| `modeId` | **제안 후 명시 확인** | 권한 등급이라 조용히 정하면 사용자가 모르는 사이에 쓰기·실행 권한이 붙는다. 아래 규칙을 따른다. |
+| `modeId` | **제안 후 명시 확인** | 대개 권한 등급이라(전용 어댑터 없는 provider는 예외) 조용히 정하면 사용자가 모르는 사이에 쓰기·실행 권한이 붙는다. 아래 규칙을 따른다. |
 | `thinkingOptionId` | **묻는다 (3턴)** | 그 모델의 `thinkingOptions`에 있는 값만. **빈 배열이면 필드를 넣지 않는다.** |
 | `notes` | 자동 생성 후 확인 | 라우팅의 유일한 근거라 초안을 만들어 form 2에서 반드시 승인받는다. 1-5 참조. |
 | `icon` | 자동 파생 | 아래 29개 키 중 역할에 가까운 것. 표시 전용이라 라우팅에 영향이 없다. form 2에서 바꿀 수 있다. |
@@ -164,7 +164,10 @@ system prompt를 넣는 근거로 쓰지 않는다. 스크립트가 알 수 없�
 provider별 값으로 옮긴다. 등급 → `modeId` 매핑과 근거는 presets.md와 provider-modes.md에
 있다. 역할에서 등급이 자명하면(검토는 읽기·확인, 작업은 파일 작성) 제안값으로 두되,
 **form 2에서 그 등급이 무엇을 허용하는지 평문으로 보여 승인받는다.** 표에 없는 provider는
-`inspect_provider`의 `modes[].id`를 받아 제약이 큰 쪽부터 세 등급에 대응시킨다.
+`inspect_provider`의 `modes[].id`를 받아 제약이 큰 쪽부터 세 등급에 대응시킨다. `modes[].id`가
+아예 빈 배열이면(전용 어댑터 없이 CLI에만 붙는 provider) 세 등급으로 나눌 수 없다 —
+`defaultMode` 값 하나를 그대로 쓴다. 판별 기준과 처리는 provider-modes.md의 「전용 어댑터
+없이 CLI에만 붙는 provider」에 있다.
 
 **명령 전권은 한 번 더 확인한다.** claude `bypassPermissions`와 codex `full-access`는 승인
 프롬프트 없이 명령 실행과 네트워크 접근을 허용한다. 이 등급은 명령 실행 자체가 목적인
@@ -246,15 +249,18 @@ gitBranch layers compass brain sparkles shield
 ### `--modes-file`은 apply의 전제다
 
 **`--apply`는 `--modes-file` 없이 차단된다**(`MODES_FILE_REQUIRED`). 프로필 추가, `--update`,
-`--replace-all` 세 경로가 전부 그렇다. `modeId`는 권한 등급이라 검증 없이 통과시키면 사용자가
-모르는 권한이 붙기 때문이다. dry-run에도 같이 붙여 apply와 같은 조건으로 미리 검증한다.
+`--replace-all` 세 경로가 전부 그렇다. `modeId`는 대개 권한 등급이라(전용 어댑터 없는
+provider는 예외) 검증 없이 통과시키면 사용자가 모르는 권한이 붙기 때문이다. dry-run에도
+같이 붙여 apply와 같은 조건으로 미리 검증한다.
 
 내용은 **1-1에서 이미 조회한 mode 목록을 옮긴 것이다. 조회를 다시 하지 않는다.**
 
 1. 1-1의 `list_providers` 결과에 provider별 mode 목록이 있으면 그것을 쓴다. 없으면 provider마다
    MCP `inspect_provider`로 `modes[].id`와 기본 mode를 받는다.
 2. provider 하나당 `modeIds`(중복 없는 문자열 배열)와 `defaultMode`(그 배열 안의 값 하나)를
-   채운다. 스키마와 예시는 「스크립트 레퍼런스」의 `--modes-file` 항목에 있다.
+   채운다. `modes[].id`가 빈 배열이면 `modeIds`를 `[defaultMode]` 하나로 채운다 — 빈 배열을
+   그대로 두면 `defaultMode`가 그 안에 있을 수 없어 검증을 통과하지 못한다. 스키마와 예시는
+   「스크립트 레퍼런스」의 `--modes-file` 항목에 있다.
 3. **쓰기 가능한 임시 디렉터리**에 저장한다. 스킬 폴더에는 쓰지 않는다 — 설치본을 직접 고치는
    것이 되고, 설치본은 갱신으로만 바꾼다. 경로는 셸이 주는 임시 디렉터리 변수로 만들고 절대
    경로를 적어 두지 않는다.
@@ -440,6 +446,7 @@ Paseo 설치의 설정은 이 명령으로 복원할 수 없다.
 
 `modeIds`는 비어 있지 않은 문자열 배열이고 중복을 허용하지 않는다. `defaultMode`는 필수이며
 반드시 그 provider의 `modeIds` 안에 있는 값이어야 한다. 어긋나면 `MODES_FILE` 오류로 막힌다.
+provider의 `modes[].id`가 빈 배열이면 `modeIds`를 `[defaultMode]`로 채워 이 조건을 만족시킨다.
 
 스크립트는 사람이 읽을 요약과 기계가 읽을 JSON을 함께 출력한다. 종료 코드 `0`은 dry-run
 또는 적용이 오류 없이 끝났다는 뜻이다. `errors`는 입력이나 적용을 고쳐야 하는 차단 조건이고,

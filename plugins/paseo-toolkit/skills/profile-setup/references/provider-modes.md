@@ -36,10 +36,10 @@ MCP를 쓸 수 없는 상황이면 확신할 수 있는 mode는 `defaultMode` �
 | --- | --- | --- |
 | `claude` | `plan` `default` `acceptEdits` `auto` `bypassPermissions` | `auto` |
 | `codex` | `auto` `auto-review` `full-access` | `auto-review` |
-| `grok` | **미확인** | 미확인 |
+| `grok` | `default` | `default` |
 
-- grok의 mode 목록은 조사되지 않았다. 추측해 채우지 말고 `list_providers` 또는
-  `inspect_provider`로 확인한다.
+- grok은 `modes[].id`가 빈 배열이라 `default` 외에 다른 값이 없다(2026-09-04 확인). 판별
+  기준과 처리 방법은 아래 「전용 어댑터 없이 CLI에만 붙는 provider」를 본다.
 - `../../scripts/manage_profiles.py`의 검증용 스냅샷 상수 `KNOWN_MODE_IDS`에는 claude와 codex
   두 provider만 있다. 여기 없는 provider는 `defaultMode`가 아닌 모든 값에
   `MODE_UNVERIFIED` **경고**를 받는다. 차단은 아니므로 `--apply`는 통과한다.
@@ -62,6 +62,37 @@ MCP를 쓸 수 없는 상황이면 확신할 수 있는 mode는 `defaultMode` �
   프로필에만 붙인다. 조사·검색처럼 읽기만 하는 프로필에는 쓰기 권한도 기본으로 주지 않는다.
 - claude `plan`은 코드 수정과 도구 실행을 막아 **문서 산출까지 막는다.** 파일을 만들어야
   하는 프로필에 쓰지 않는다. `../../scripts/manage_profiles.py`가 `CLAUDE_PLAN` 경고를 낸다.
+
+### 전용 어댑터 없이 CLI에만 붙는 provider
+
+claude·codex는 Paseo가 전용 어댑터로 붙어 mode·thinking을 어댑터 차원에서 옮겨 준다. 일부
+provider는 어댑터 없이 일반 ACP로 그 CLI의 stdio에만 붙는다 — Paseo 쪽에 mode·thinking을
+옮길 통로 자체가 없다.
+
+**판별 기준.** `inspect_provider`의 `modes`와 그 모델의 `thinkingOptions`가 **둘 다 빈
+배열**이고, `list_providers`/`provider ls --json`에는 `defaultMode` 하나만 값으로 남으면 이
+경우다. mode가 하나뿐인 경우(위 「권한 등급 대응」의 "mode가 하나뿐이면" 문단)와는 다르다 —
+하나뿐이면 `modes[].id`에 그 값이라도 있지만, 이 경우는 `modes[].id` 자체가 비어 있다.
+(2026-09-04 기준 `grok`이 이 상태다.)
+
+이 경우의 처리:
+
+- **`modeId`는 `defaultMode` 값 하나를 세 등급 모두에 쓴다.** 그 provider 안에서 권한 등급을
+  나눌 방법이 없어 **이 값을 넣어도 그 provider의 동작은 바뀌지 않는다.** 그래도 필드를
+  비워 두면 provider가 다른 `create_agent` 호출이 `cannot inherit mode ... from caller`로
+  거절되므로 값 자체는 채운다.
+- **`thinkingOptionId`는 넣지 않는다.** 다른 provider에서 쓰던 값(예: codex의 `xhigh`,
+  `max`)을 그대로 옮기지 않는다. 처리는 「함정 — 옵션이 빈 배열인 모델」과 같지만 원인은
+  다르다 — 그 절의 모델들은 모델 자체에 사고 깊이가 없고, 여기는 모델엔 있어도 Paseo가 그
+  값을 받아올 통로가 없는 것이다.
+- **`featureValues`의 토글은 이름이 같아 보여도 다른 provider의 것과 같다고 가정하지
+  않는다.** 아래 「featureValues」의 `auto_accept` 항목을 본다.
+- **사고 깊이·권한 세부·스킬·MCP·로그인처럼 실제 동작을 바꾸는 값은 Paseo 프로필이 아니라 그
+  CLI 자체 설정에 있다.** 프로필로 흉내 내려 하지 말고 설정 위치를 사용자에게 안내한다.
+  grok은 `~/.grok/config.toml`의 `[models] default_reasoning_effort`가 실제 제어 지점이다 —
+  `grok-4.6` 허용값은 `low`/`medium`/`high`/`xhigh`, 기본은 `high`, 최대는 `xhigh`다. CLI
+  플래그는 `--reasoning-effort`/`--effort`, API wire는 `reasoning.effort`이고, 로컬
+  `~/.grok/models_cache.json`도 같은 메뉴를 광고한다.
 
 ## 활성 provider
 
@@ -106,6 +137,11 @@ MCP를 쓸 수 없는 상황이면 확신할 수 있는 mode는 `defaultMode` �
 **Haiku 4.5와 `opus[1m]`에는 `thinkingOptionId`를 넣지 않는다. 필드 자체를 생략한다.**
 빈 문자열도 `off`도 안 된다. 이 두 모델에는 유효한 값이 하나도 없다.
 
+grok-4.6도 `thinkingOptions`가 빈 배열로 온다(2026-09-04 확인). 원인은 다르다 — 모델 자체에
+사고 깊이가 없는 게 아니라, Paseo가 grok을 전용 어댑터 없이 일반 ACP로만 붙여 그 값을 받아올
+통로가 없는 것이다. 처리는 같다: `thinkingOptionId`를 넣지 않는다. 원인과 다른 필드까지
+함께 보려면 「provider별 mode」의 「전용 어댑터 없이 CLI에만 붙는 provider」를 본다.
+
 `../../scripts/manage_profiles.py`는 모델의 `thinkingOptionIds`에 없는 값을 **경고가 아니라
 오류(`THINKING`)로 막는다.** 오류가 하나라도 있으면 `--apply`가 프로필 전체를 쓰지 않는다.
 
@@ -148,8 +184,14 @@ provider·모델별 토글 스위치 모음이다. 값은 `{ "<feature id>": <bo
 | `codex/gpt-5.6-luna`, `codex/gpt-5.6-terra`, `codex/gpt-5.6-sol` | `fast_mode`, `plan_mode` | toggle | `false` |
 | `claude/claude-opus-5` | `fast_mode` | toggle | `false` |
 | `claude/claude-sonnet-5` | 없음 (빈 배열) | — | — |
+| `grok/grok-4.6` | `auto_accept` | toggle | 미확인 |
 
 - feature 집합은 **모델마다 다르다.** 같은 provider라도 모델이 바뀌면 다시 확인한다.
   근거는 `inspect_provider`가 돌려준 `features[].id`다.
 - Paseo CLI(`paseo run`, `paseo agent update`)에는 feature 관련 플래그가 **없다.**
   feature를 지정해 에이전트를 띄워야 하면 MCP `create_agent`의 `settings.features`를 쓴다.
+- **이름이 비슷해도 다른 provider의 기능과 같다고 가정하지 않는다.** grok의 `auto_accept`는
+  권한 확인 프롬프트에 Allow를 대신 눌러주는 feature 토글이다. codex의 `auto-review`는 이름이
+  비슷해 보여도 **feature가 아니라 `modeId`**이고, 승인을 건너뛰는 게 아니라 리뷰
+  서브에이전트로 우회하는 것이다. 뜻이 같다고 가정하지 말고 `inspect_provider`의
+  `features[].id`로 그 provider·모델에 실제로 있는 기능인지 먼저 확인한다.
