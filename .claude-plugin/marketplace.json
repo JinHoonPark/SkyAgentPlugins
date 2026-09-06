@@ -8,7 +8,7 @@
     {
       "name": "paseo-toolkit",
       "source": "./plugins/paseo-toolkit",
-      "description": "Operate the Paseo CLI and daemon: configure agent profiles and report the results.",
+      "description": "Operate Paseo agents and daemon: orchestrate staged workflows, configure agent profiles, and report results.",
       "keywords": [
         "category:workflow"
       ]

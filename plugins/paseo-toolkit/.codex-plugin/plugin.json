@@ -1,7 +1,7 @@
 {
   "name": "paseo-toolkit",
-  "version": "0.2.2",
-  "description": "Operate the Paseo CLI and daemon: configure agent profiles and report the results.",
+  "version": "0.2.3",
+  "description": "Operate Paseo agents and daemon: orchestrate staged workflows, configure agent profiles, and report results.",
   "author": {
     "name": "Sky"
   },
