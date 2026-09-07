@@ -2047,6 +2047,81 @@ def apply_agent(args: argparse.Namespace, document: dict[str, Any], agent: str) 
         )
 
 
+def _plugin_scope_files(plugin_root: Path, agent: str) -> tuple[dict[str, Path], list[str]]:
+    files: dict[str, Path] = {}
+    errors: list[str] = []
+    manifest = plugin_root / (".claude-plugin" if agent == "claude" else ".codex-plugin") / "plugin.json"
+
+    def add_file(path: Path) -> None:
+        try:
+            is_file = path.is_file()
+        except OSError as exc:
+            errors.append(f"{path}: {exc}")
+            return
+        if not is_file:
+            return
+        try:
+            rel = path.relative_to(plugin_root).as_posix()
+        except ValueError as exc:
+            errors.append(f"{path}: {exc}")
+            return
+        files[rel] = path
+
+    def on_walk_error(exc: OSError) -> None:
+        location = getattr(exc, "filename", None) or "?"
+        errors.append(f"{location}: {exc}")
+
+    for base in (plugin_root / "skills", plugin_root / "scripts"):
+        try:
+            is_dir = base.is_dir()
+        except OSError as exc:
+            errors.append(f"{base}: {exc}")
+            continue
+        if not is_dir:
+            continue
+        for dirpath, _dirnames, filenames in os.walk(base, followlinks=False, onerror=on_walk_error):
+            for filename in filenames:
+                add_file(Path(dirpath) / filename)
+    add_file(manifest)
+    return files, errors
+
+
+def compare_plugin_install(
+    root: Path, agent: str, plugin: str, install_root: str | Path,
+) -> tuple[bool, list[str]]:
+    source_root = root / "plugins" / plugin
+    dest_root = Path(str(install_root))
+    if not dest_root.is_dir():
+        return False, [f"{plugin}: 설치본 경로가 없습니다."]
+    source_files, source_errors = _plugin_scope_files(source_root, agent)
+    dest_files, dest_errors = _plugin_scope_files(dest_root, agent)
+    notes: list[str] = []
+    for item in source_errors:
+        notes.append(f"{plugin}: 소스를 탐색하지 못했습니다: {item}")
+    for item in dest_errors:
+        notes.append(f"{plugin}: 설치본을 탐색하지 못했습니다: {item}")
+    if source_errors or dest_errors:
+        return False, notes
+    dest_only = sorted(set(dest_files) - set(source_files))
+    source_only = sorted(set(source_files) - set(dest_files))
+    if dest_only:
+        notes.append(f"{plugin}: 캐시에만 있는 파일: {', '.join(dest_only)}")
+    if source_only:
+        notes.append(f"{plugin}: 설치본에 없는 파일: {', '.join(source_only)}")
+    mismatched: list[str] = []
+    for rel in sorted(set(source_files) & set(dest_files)):
+        try:
+            if source_files[rel].read_bytes() != dest_files[rel].read_bytes():
+                mismatched.append(rel)
+        except OSError as exc:
+            notes.append(f"{plugin}: {rel} 을 읽지 못했습니다: {exc}")
+    if mismatched:
+        notes.append(f"{plugin}: 바이트가 다른 파일: {', '.join(mismatched)}")
+    if notes:
+        return False, notes
+    return True, [f"{plugin}: 설치본이 소스와 바이트 일치합니다."]
+
+
 def assess_listed_plugins(
     root: Path, agent: str, expect: list[str], found: list[dict[str, Any]],
     declared_versions: dict[str, str | None] | None = None,
@@ -2081,9 +2156,24 @@ def assess_listed_plugins(
             if not declared_ver:
                 ok = False
                 notes.append(f"{name}: 선언 버전을 읽지 못했습니다.")
-            elif declared_ver not in installed_vers:
+                continue
+            if declared_ver not in installed_vers:
                 ok = False
                 notes.append(f"{name}: 설치 버전 {', '.join(str(v) for v in installed_vers)} ≠ 선언 {declared_ver}")
+                continue
+            chosen_list = [item for item in ours if item.get("version") == declared_ver]
+            any_mismatch = False
+            success_notes: list[str] = []
+            for chosen in chosen_list:
+                match_ok, match_notes = compare_plugin_install(root, agent, name, chosen["path"])
+                if not match_ok:
+                    any_mismatch = True
+                    ok = False
+                    notes.extend(match_notes)
+                else:
+                    success_notes.extend(match_notes)
+            if not any_mismatch:
+                notes.extend(success_notes)
             continue
         ours = [item for item in matches if (item.get("marketplace") or "") == marketplace]
         if not ours:
@@ -2097,15 +2187,14 @@ def assess_listed_plugins(
         if not here:
             ok = False
             notes.append(f"{name}: 설치본이 이 워크트리 경로에서 오지 않았습니다.")
+            continue
+        ok = False
+        notes.append(f"{name}: codex 설치본은 대조 불가")
     if missing:
         ok = False
         notes.append(f"list에 없음: {', '.join(missing)}")
     elif ok:
-        notes.append(
-            "선언한 플러그인이 캐시에 있고 버전이 일치합니다."
-            if agent == "claude"
-            else "선언한 플러그인이 이 워크트리 설치본으로 list에 있습니다."
-        )
+        notes.append("선언한 플러그인이 캐시에 있고 버전이 일치합니다.")
     return ok, notes
 
 
@@ -3316,10 +3405,127 @@ def self_test() -> int:
     check(_exit("check", {"errors": [], "appliedAny": True, "validated": {"claude": empty_results}, "applyOk": False, "needsApproval": False}) == EXIT_ERROR, "빈 설치 check 오류")
     check(_exit("loop", {"errors": ["claude: 매니페스트에 없는 플러그인: ghost-plugin"], "appliedAny": False, "needsApproval": False}) == EXIT_ERROR, "미선언 loop 오류")
 
-    cache_ok, _ = assess_listed_plugins(
-        fake_root, "claude", ["paseo-toolkit"], claude_plugins, {"paseo-toolkit": "0.2.0"}, "sky-agent-plugins"
+    def _write_plugin_tree(base: Path) -> Path:
+        plugin = base / "plugins" / "paseo-toolkit"
+        (plugin / "skills" / "demo").mkdir(parents=True)
+        (plugin / "scripts").mkdir(parents=True)
+        (plugin / ".claude-plugin").mkdir(parents=True)
+        (plugin / "skills" / "demo" / "SKILL.md").write_bytes(b"skill-body")
+        (plugin / "scripts" / "shared.py").write_bytes(b"print(1)\n")
+        (plugin / ".claude-plugin" / "plugin.json").write_bytes(b'{"name":"paseo-toolkit","version":"0.2.0"}')
+        for path in (
+            base, base / "plugins", plugin, plugin / "skills", plugin / "skills" / "demo",
+            plugin / "scripts", plugin / ".claude-plugin",
+            plugin / "skills" / "demo" / "SKILL.md", plugin / "scripts" / "shared.py",
+            plugin / ".claude-plugin" / "plugin.json",
+        ):
+            register_deletable(path)
+        return plugin
+
+    cmp_src = tmp_snap_dir / "cmp-src"
+    cmp_cache = tmp_snap_dir / "cmp-cache"
+    _write_plugin_tree(cmp_src)
+    _write_plugin_tree(cmp_cache)
+    matching = parse_plugins("claude", [{
+        "id": "paseo-toolkit@sky-agent-plugins", "version": "0.2.0",
+        "installPath": str(cmp_cache / "plugins" / "paseo-toolkit"),
+    }])
+    cache_ok, cache_ok_notes = assess_listed_plugins(
+        cmp_src, "claude", ["paseo-toolkit"], matching, {"paseo-toolkit": "0.2.0"}, "sky-agent-plugins"
     )
     check(cache_ok is True, "claude 캐시+버전 통과")
+    check(any("바이트 일치" in n for n in cache_ok_notes), "claude 바이트 일치 기록")
+    skill_cache = cmp_cache / "plugins" / "paseo-toolkit" / "skills" / "demo" / "SKILL.md"
+    skill_cache.write_bytes(skill_cache.read_bytes() + b"x")
+    byte_ok, byte_notes = assess_listed_plugins(
+        cmp_src, "claude", ["paseo-toolkit"], matching, {"paseo-toolkit": "0.2.0"}, "sky-agent-plugins"
+    )
+    check(byte_ok is False and any("바이트가 다른" in n for n in byte_notes), "1바이트 차이 실패")
+    check(
+        _exit("loop", {"errors": [], "appliedAny": True, "applyOk": False, "needsApproval": False}) == EXIT_ERROR,
+        "설치본 불일치는 loop --yes 로 통과하지 않음",
+    )
+    skill_cache.write_bytes(b"skill-body")
+    extra_cache = cmp_cache / "plugins" / "paseo-toolkit" / "skills" / "demo" / "extra.md"
+    extra_cache.write_bytes(b"only-in-cache")
+    register_deletable(extra_cache)
+    extra_ok, extra_notes = assess_listed_plugins(
+        cmp_src, "claude", ["paseo-toolkit"], matching, {"paseo-toolkit": "0.2.0"}, "sky-agent-plugins"
+    )
+    check(extra_ok is False and any("캐시에만" in n for n in extra_notes), "캐시 전용 파일 실패")
+    extra_cache.unlink()
+    stale_dir = cmp_cache / "plugins" / "paseo-toolkit" / "skills" / "old"
+    stale_dir.mkdir()
+    stale_walk = stale_dir / "old.md"
+    stale_walk.write_bytes(b"old")
+    register_deletable(stale_walk)
+    register_deletable(stale_dir)
+    orig_scandir = os.scandir
+    def fake_scandir(path: Any) -> Any:
+        if os.path.normcase(os.path.normpath(str(path))) == os.path.normcase(os.path.normpath(str(stale_dir))):
+            raise PermissionError("denied")
+        return orig_scandir(path)
+    os.scandir = fake_scandir
+    try:
+        walk_ok, walk_notes = assess_listed_plugins(
+            cmp_src, "claude", ["paseo-toolkit"], matching, {"paseo-toolkit": "0.2.0"}, "sky-agent-plugins"
+        )
+    finally:
+        os.scandir = orig_scandir
+    check(walk_ok is False and any("탐색하지 못했습니다" in n for n in walk_notes), "디렉터리 열거 오류는 검증 실패")
+    stale_walk.unlink()
+    stale_dir.rmdir()
+    stale_stat = cmp_cache / "plugins" / "paseo-toolkit" / "skills" / "demo" / "stale.md"
+    stale_stat.write_bytes(b"stale")
+    register_deletable(stale_stat)
+    orig_is_file = Path.is_file
+    def fake_is_file(self: Path) -> bool:
+        if os.path.normcase(os.path.normpath(str(self))) == os.path.normcase(os.path.normpath(str(stale_stat))):
+            raise PermissionError("denied")
+        return orig_is_file(self)
+    Path.is_file = fake_is_file
+    try:
+        stat_ok, stat_notes = assess_listed_plugins(
+            cmp_src, "claude", ["paseo-toolkit"], matching, {"paseo-toolkit": "0.2.0"}, "sky-agent-plugins"
+        )
+    finally:
+        Path.is_file = orig_is_file
+    check(stat_ok is False and any("탐색하지 못했습니다" in n for n in stat_notes), "파일 상태 조회 오류는 검증 실패")
+    stale_stat.unlink()
+    cache2 = tmp_snap_dir / "cmp-cache-2"
+    _write_plugin_tree(cache2)
+    extra2 = cache2 / "plugins" / "paseo-toolkit" / "skills" / "demo" / "stale.md"
+    extra2.write_bytes(b"stale")
+    register_deletable(extra2)
+    dual = parse_plugins("claude", [
+        {
+            "id": "paseo-toolkit@sky-agent-plugins", "version": "0.2.0",
+            "installPath": str(cmp_cache / "plugins" / "paseo-toolkit"),
+        },
+        {
+            "id": "paseo-toolkit@sky-agent-plugins", "version": "0.2.0",
+            "installPath": str(cache2 / "plugins" / "paseo-toolkit"),
+        },
+    ])
+    dual_ok, dual_notes = assess_listed_plugins(
+        cmp_src, "claude", ["paseo-toolkit"], dual, {"paseo-toolkit": "0.2.0"}, "sky-agent-plugins"
+    )
+    check(dual_ok is False and any("캐시에만" in n for n in dual_notes), "복수 설치 두 번째 불일치")
+    script_cache = cmp_cache / "plugins" / "paseo-toolkit" / "scripts" / "shared.py"
+    script_cache.write_bytes(b"print(2)\n")
+    script_ok, script_notes = assess_listed_plugins(
+        cmp_src, "claude", ["paseo-toolkit"], matching, {"paseo-toolkit": "0.2.0"}, "sky-agent-plugins"
+    )
+    check(script_ok is False and any("scripts/shared.py" in n for n in script_notes), "공용 스크립트 바이트 차이")
+    script_cache.write_bytes(b"print(1)\n")
+    manifest_cache = cmp_cache / "plugins" / "paseo-toolkit" / ".claude-plugin" / "plugin.json"
+    orig_manifest = manifest_cache.read_bytes()
+    manifest_cache.write_bytes(orig_manifest + b"\n")
+    man_ok, man_notes = assess_listed_plugins(
+        cmp_src, "claude", ["paseo-toolkit"], matching, {"paseo-toolkit": "0.2.0"}, "sky-agent-plugins"
+    )
+    check(man_ok is False and any(".claude-plugin/plugin.json" in n for n in man_notes), "매니페스트 바이트 차이")
+    manifest_cache.write_bytes(orig_manifest)
     cache_bad, notes = assess_listed_plugins(
         fake_root, "claude", ["paseo-toolkit"], claude_plugins, {"paseo-toolkit": "0.3.0"}, "sky-agent-plugins"
     )
@@ -3345,10 +3551,13 @@ def self_test() -> int:
     other_ok, other_notes = assess_listed_plugins(fake_root, "codex", ["paseo-toolkit"], other, {}, "sky-agent-plugins")
     check(other_ok is False and any("워크트리" in n for n in other_notes), "다른 경로 실패")
     here = parse_plugins("codex", {"installed": [{"pluginId": "paseo-toolkit@sky-agent-plugins", "name": "paseo-toolkit", "marketplaceName": "sky-agent-plugins", "source": {"source": "local", "path": str(fake_root / "plugins" / "paseo-toolkit")}}], "available": []})
-    check(assess_listed_plugins(fake_root, "codex", ["paseo-toolkit"], here, {}, "sky-agent-plugins")[0] is True, "워크트리 설치 통과")
+    here_ok, here_notes = assess_listed_plugins(fake_root, "codex", ["paseo-toolkit"], here, {}, "sky-agent-plugins")
+    check(here_ok is False and any("대조 불가" in n for n in here_notes), "codex source.path 만 있으면 대조 불가")
     check(assess_listed_plugins(Path(normalize_path_text(r"C:\foo")), "codex", ["paseo-toolkit"], parse_plugins("codex", {"installed": [{"pluginId": "paseo-toolkit@sky-agent-plugins", "name": "paseo-toolkit", "marketplaceName": "sky-agent-plugins", "source": {"source": "local", "path": r"C:\foobar"}}], "available": []}), {}, "sky-agent-plugins")[0] is False, "접두 경로")
     nested_root = Path(normalize_path_text(r"X:\synth-repo"))
-    check(assess_listed_plugins(nested_root, "codex", ["codex-skill-creator"], parse_plugins("codex", {"installed": [{"pluginId": "codex-skill-creator@sky-agent-plugins", "name": "codex-skill-creator", "marketplaceName": "sky-agent-plugins", "source": {"source": "local", "path": r"X:\synth-repo\plugins\codex-skill-creator"}}], "available": []}), {}, "sky-agent-plugins")[0] is True, "plugins\\name")
+    nested_ok, nested_notes = assess_listed_plugins(nested_root, "codex", ["codex-skill-creator"], parse_plugins("codex", {"installed": [{"pluginId": "codex-skill-creator@sky-agent-plugins", "name": "codex-skill-creator", "marketplaceName": "sky-agent-plugins", "source": {"source": "local", "path": r"X:\synth-repo\plugins\codex-skill-creator"}}], "available": []}), {}, "sky-agent-plugins")
+    check(nested_ok is False and any("대조 불가" in n for n in nested_notes), "plugins\\name 은 워크트리 하위지만 대조 불가")
+    check(not any("워크트리 경로에서 오지" in n for n in nested_notes), "plugins\\name 을 워크트리 밖으로 오판하지 않음")
 
     err_plan = plan_register(fake_root, _snap(errors=["marketplace list JSON 파싱 실패"]))
     check(err_plan["action"] != "add" and err_plan.get("commands") == [], "파싱 오류 add 금지")
@@ -3404,6 +3613,8 @@ def self_test() -> int:
         skill_body = skill_a.read_text(encoding="utf-8")
         check("| 의도 | 명령 |" not in skill_body, "SKILL 명령표 없음")
         check("자동으로 갈린다" in skill_body and "지정할 것은 없다" in skill_body, "SKILL 자동 유도")
+        check("직속 하위" in skill_body, "SKILL --env 직속 하위")
+        check("특별한 위치를 쓰고 싶을 때의 선택지" not in skill_body, "SKILL 옛 --env 문구 제거")
         check("비대화형" in skill_body, "SKILL 비대화형 실행 경로")
         check("approval_policy=never" in skill_body, "SKILL Codex 비대화형 승인")
         check("junction" in skill_body and "--yes" in skill_body, "SKILL junction 거부")
