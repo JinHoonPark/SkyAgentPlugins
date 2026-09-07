@@ -1,0 +1,4 @@
+interface:
+  display_name: "Plugin Dev Loop"
+  short_description: "Check, register, or loop-install this worktree marketplace"
+  default_prompt: "Use $plugin-dev-loop to check this worktree marketplace and, with approval, register and install plugins."
