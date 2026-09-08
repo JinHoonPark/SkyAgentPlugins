@@ -421,6 +421,11 @@ def make_parser() -> JsonArgumentParser:
     )
     parser.add_argument("--apply", action="store_true", help="검증된 변경을 실제로 반영합니다.")
     parser.add_argument(
+        "--no-reload",
+        action="store_true",
+        help="--apply와 함께 쓰면 config.json에는 쓰되 paseo daemon reload는 건너뜁니다.",
+    )
+    parser.add_argument(
         "--update",
         action="store_true",
         help="동일 id가 있을 때 정확히 하나의 기존 프로필을 교체합니다.",
@@ -1409,7 +1414,8 @@ def reload_and_verify(log_path: Path | None) -> dict[str, Any]:
 
 
 def restore_backup_and_reload(
-    config_path: Path, backup_path: Path, log_path: Path | None
+    config_path: Path, backup_path: Path, log_path: Path | None,
+    skip_reload: bool = False,
 ) -> dict[str, Any]:
     result: dict[str, Any] = {
         "attempted": True,
@@ -1441,8 +1447,12 @@ def restore_backup_and_reload(
             result["error"] = "복원된 config.json의 바이트가 백업과 다릅니다."
             return result
         result["restoredAgentProfilesCount"] = len(backup_profiles)
-        result["reload"] = reload_and_verify(log_path)
-        result["ok"] = bool(result["reload"].get("ok"))
+        if skip_reload:
+            result["reload"] = {"attempted": False, "command": None, "log": None, "ok": True}
+            result["ok"] = True
+        else:
+            result["reload"] = reload_and_verify(log_path)
+            result["ok"] = bool(result["reload"].get("ok"))
         return result
     except (OSError, ValueError, RuntimeError) as exc:
         result["error"] = str(exc)
@@ -1456,6 +1466,7 @@ def apply_profile_plan(
     planned_profiles: list[Any],
     log_path: Path | None,
     problems: Problems,
+    skip_reload: bool = False,
 ) -> dict[str, Any]:
     result: dict[str, Any] = {
         "attempted": True,
@@ -1493,15 +1504,25 @@ def apply_profile_plan(
         if not verify_exact_change(rechecked.document, written.document, planned_profiles, problems, "기록된 config"):
             raise RuntimeError("기록 뒤 config.json의 배열 변화 검증에 실패했습니다.")
 
-        result["reload"] = reload_and_verify(log_path)
-        if not result["reload"].get("ok"):
-            raise RuntimeError("paseo daemon reload 명령이 실패했습니다.")
+        if skip_reload:
+            result["reload"] = {"attempted": False, "command": None, "log": None, "ok": True}
+            problems.warning(
+                "RELOAD_SKIPPED",
+                "config.json에는 썼지만 paseo daemon reload를 건너뛰었습니다. daemon은 아직 옛 값을 들고 있습니다.",
+                path_text(config_path),
+            )
+        else:
+            result["reload"] = reload_and_verify(log_path)
+            if not result["reload"].get("ok"):
+                raise RuntimeError("paseo daemon reload 명령이 실패했습니다.")
         result["ok"] = True
         return result
     except (OSError, ValueError, RuntimeError, TypeError) as exc:
         problems.error("APPLY", str(exc), path_text(config_path))
         if result["written"] and backup_path is not None:
-            result["rollback"] = restore_backup_and_reload(config_path, backup_path, log_path)
+            result["rollback"] = restore_backup_and_reload(
+                config_path, backup_path, log_path, skip_reload=skip_reload
+            )
             if not result["rollback"].get("ok"):
                 problems.error("ROLLBACK", "적용 실패 뒤 백업 복원 또는 reload 검증에도 실패했습니다.", path_text(config_path))
         return result
@@ -1513,6 +1534,7 @@ def apply_explicit_rollback(
     requested_backup: JsonSnapshot,
     log_path: Path | None,
     problems: Problems,
+    skip_reload: bool = False,
 ) -> dict[str, Any]:
     result: dict[str, Any] = {
         "attempted": True,
@@ -1560,15 +1582,25 @@ def apply_explicit_rollback(
             raise RuntimeError("복원된 config.json의 바이트가 지정 백업과 다릅니다.")
         result["restoredAgentProfilesCount"] = len(restored_profiles)
 
-        result["reload"] = reload_and_verify(log_path)
-        if not result["reload"].get("ok"):
-            raise RuntimeError("rollback 뒤 paseo daemon reload 명령이 실패했습니다.")
+        if skip_reload:
+            result["reload"] = {"attempted": False, "command": None, "log": None, "ok": True}
+            problems.warning(
+                "RELOAD_SKIPPED",
+                "config.json에는 복원했지만 paseo daemon reload를 건너뛰었습니다. daemon은 아직 옛 값을 들고 있습니다.",
+                path_text(config_path),
+            )
+        else:
+            result["reload"] = reload_and_verify(log_path)
+            if not result["reload"].get("ok"):
+                raise RuntimeError("rollback 뒤 paseo daemon reload 명령이 실패했습니다.")
         result["ok"] = True
         return result
     except (OSError, ValueError, RuntimeError, TypeError) as exc:
         problems.error("ROLLBACK", str(exc), path_text(config_path))
         if result["restored"] and safety_backup is not None:
-            result["recovery"] = restore_backup_and_reload(config_path, safety_backup, log_path)
+            result["recovery"] = restore_backup_and_reload(
+                config_path, safety_backup, log_path, skip_reload=skip_reload
+            )
             if not result["recovery"].get("ok"):
                 problems.error("ROLLBACK_RECOVERY", "rollback 실패 뒤 안전 백업 복원 또는 reload 검증에도 실패했습니다.", path_text(config_path))
         return result
@@ -1783,6 +1815,8 @@ def resolve_argument_state(args: argparse.Namespace, problems: Problems) -> tupl
         problems.error("ARGUMENT", "--update는 일반 프로필 추가/교체 입력에만 사용할 수 있습니다.")
     if args.list_profiles and args.apply:
         problems.error("ARGUMENT", "--list는 읽기 전용이므로 --apply와 함께 사용할 수 없습니다.")
+    if args.no_reload and not args.apply:
+        problems.error("ARGUMENT", "--no-reload는 --apply와 함께 사용할 수 있습니다.")
     if args.json and not args.list_profiles:
         problems.error("ARGUMENT", "--json은 --list와 함께 사용할 수 있습니다.")
     if args.detail and not args.list_profiles:
@@ -1861,7 +1895,8 @@ def execute_rollback(
         return finish(result, problems, EXIT_OK)
 
     operation = apply_explicit_rollback(
-        config_path, current, requested_backup, runtime.log_path, problems
+        config_path, current, requested_backup, runtime.log_path, problems,
+        skip_reload=args.no_reload,
     )
     result["rollback"] = operation
     result["backupPath"] = operation.get("safetyBackupPath")
@@ -1906,6 +1941,7 @@ def execute_profile_plan(
         plan.profiles,
         runtime.log_path,
         problems,
+        skip_reload=args.no_reload,
     )
     result["apply"] = operation
     result["backupPath"] = operation.get("backupPath")
@@ -2094,14 +2130,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     runtime = discover_runtime_paths(
         problems,
         require_home=config_override is None,
-        require_log_path=args.apply,
+        require_log_path=args.apply and not args.no_reload,
     )
     config_path = config_override
     if config_path is None and runtime.home is not None:
         config_path = runtime.home / "config.json"
 
     daemon_config_path = runtime.home / "config.json" if runtime.home is not None else None
-    if args.apply and config_override is not None and daemon_config_path is not None:
+    if args.apply and not args.no_reload and config_override is not None and daemon_config_path is not None:
         if path_text(config_override) != path_text(daemon_config_path):
             problems.warning(
                 "CONFIG_OVERRIDE_RELOAD_LIMIT",

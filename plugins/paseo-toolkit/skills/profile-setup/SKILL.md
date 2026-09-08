@@ -64,7 +64,7 @@ Paseo 프로필은 사람이 정한 시작 구성 묶음이다. 팀장(오케스
 | 삭제 | 없음 | 지울 것이 없다고 알리고 끝낸다. |
 
 `--list`는 여러 프로필을 나란히 놓고 **고를 때** 쓰고(변경·삭제 대상 선택), `--list --detail`은
-한 건씩 **확인할 때** 쓴다(등록 뒤 기록된 값 확인, 사라질 목록 확인). 목록 서식은 스크립트가
+한 건씩 **확인할 때** 쓴다(변경 전 현재 값, 사라질 목록 확인). 목록 서식은 스크립트가
 소유하므로 출력을 그대로 보여 주고 요약해 다시 쓰지 않는다.
 
 ## 1. 프로필 설계
@@ -299,9 +299,14 @@ backup과 `paseo daemon reload`를 하므로, 프로필마다 적용하면 그 �
 질문 루프를 모두 마친 뒤 배열 하나를 만들어 dry-run이 오류 없이 끝나는 것을 확인하고
 `--apply`를 붙인다. 인수·차단 조건은 「스크립트 레퍼런스」를 따른다.
 
+`--apply`를 실행하기 전에 **「데몬을 리로드할까요?」를 묻는다.** Yes면 `--apply`(쓰기 + reload).
+No면 `--apply --no-reload`(config.json에는 쓰되 daemon reload는 건너뛴다). No인 경우 daemon은
+옛 값을 들고 있고, 스크립트가 `RELOAD_SKIPPED` 경고를 JSON `warnings`와 stderr 요약으로 낸다. 그 뜻을 사용자에게 알린다.
+
 ```powershell
 python ../../scripts/manage_profiles.py profiles.json --modes-file $modes
 python ../../scripts/manage_profiles.py profiles.json --modes-file $modes --apply
+python ../../scripts/manage_profiles.py profiles.json --modes-file $modes --apply --no-reload
 ```
 
 ### id가 겹칠 때
@@ -312,10 +317,23 @@ python ../../scripts/manage_profiles.py profiles.json --modes-file $modes --appl
 
 ### 등록 뒤 확인
 
-`--apply`가 끝나면 기록된 값을 데이터 수준에서 확인한다. `--list --detail`로 설정 파일의
-값을 보여 의도와 대조하고, MCP `list_profiles`(없으면 Paseo 데스크톱 UI 목록)로 데몬이
-든 값을 읽어 같은 대조를 한다. 프로필에 실제 작업을 시켜 품질을 보지 않는다. 그다음
-5절로 간다.
+`--apply`가 끝나면 `scripts/check_registration.py`로 기록된 값을 데이터 수준에서 확인한다.
+`--list --detail`과 데몬 목록을 눈으로 대조하지 마라 — 그 사람용 출력은 `featureValues`를 생략한다.
+
+디스크는 `python ../../scripts/manage_profiles.py --list --json`으로 받는다. 데몬은
+`--apply` 직후 MCP `list_profiles`를 **다시** 호출한다. 0절 스냅샷은 방금 등록한 값을
+담고 있지 않아 재사용할 수 없다.
+
+```bash
+python ../../scripts/manage_profiles.py --list --json > disk.json
+# daemon.json 은 --apply 직후 MCP list_profiles 결과를 저장한 파일이다.
+python scripts/check_registration.py --disk disk.json --daemon daemon.json
+```
+
+종료 코드 0은 전부 일치, 1은 불일치(필드 차이·disk-only·daemon-only), 2는 입력·실행 오류다.
+2를 일치로 치지 마라. 사람 출력은 `[PASS|FAIL] id`와 불일치 필드다. `--json`이면 `{"axis":"registration","results":[...],"summary":{"passed","failed","total"}}`.
+
+프로필에 실제 작업을 시켜 품질을 보지 않는다. 그다음 5절로 간다.
 
 ## 3. 변경
 
@@ -412,6 +430,7 @@ python ../../scripts/manage_profiles.py profiles.json --replace-all --modes-file
 | --- | --- |
 | `INPUT` | 프로필 JSON 파일 경로. 생략하면 stdin을 읽는다. |
 | `--apply` | 검증된 변경을 실제로 반영한다. 없으면 완전한 dry-run이다. 프로필 추가·`--update`·`--replace-all`에서는 `--modes-file`이 함께 있어야 한다. |
+| `--no-reload` | `--apply`와 함께만 쓴다. config.json에는 쓰되 `paseo daemon reload`를 건너뛴다. 단독 사용은 `ARGUMENT` 오류. `--rollback --apply`에도 같다. 이 조합은 daemon `logPath`를 요구하지 않는다. |
 | `--update` | 같은 id의 기존 프로필 정확히 하나를 교체한다. |
 | `--replace-all` | INPUT 배열로 `agentProfiles` 전체를 교체한다. |
 | `--delete ID [ID ...]` | 여러 id를 한 번에 제거한다. INPUT과 함께 쓸 수 없다. |
@@ -423,17 +442,21 @@ python ../../scripts/manage_profiles.py profiles.json --replace-all --modes-file
 | `--rollback BACKUP` | 지정한 백업 JSON을 복원한다. `--apply`가 없으면 dry-run이다. |
 
 `--apply`의 백업·원본 재확인·배열만 변경·재파싱·reload·실패 시 복원은 스크립트가 처리한다.
-성공은 기록된 배열이 계획과 일치하고 배열 밖 값이 보존되며 `paseo daemon reload` 종료 코드가
-0인 것이다. 성공 문구(`Configuration reloaded.`)는 보조 확인이다. 기록 뒤 이 판정에 어긋나면
-스크립트가 backup을 복원하고 다시 reload한다. 복원과 재reload까지 실패하면 `ROLLBACK`이다.
+성공은 기록된 배열이 계획과 일치하고 배열 밖 값이 보존된 것이다. `--apply`만 쓰면 여기에
+`paseo daemon reload` 종료 코드 0이 더해진다. 성공 문구(`Configuration reloaded.`)는 보조
+확인이다. `--apply --no-reload`면 reload를 시도하지 않고 JSON `reload`는
+`{"attempted": false, "command": null, "log": null, "ok": true}`이며 `RELOAD_SKIPPED`
+경고가 JSON `warnings`와 stderr 요약으로 난다. 기록 뒤 이 판정에 어긋나면 스크립트가
+backup을 복원하고, reload를 건너뛰지 않은 경우에만 다시 reload한다. 복원과 재reload까지
+실패하면 `ROLLBACK`이다.
 기록 전 불일치(백업 hash, 원본 변경, 적용 예정 배열 검증 실패)는 쓰기를 차단한다. 기존
 `config.json.bak`은 덮어쓰지 않는다.
 
 데몬 로그는 진단 전용이다. 적용 성공·실패의 근거로 쓰지 않는다. 값이 의도대로 기록됐는지는
-이 스킬이 `--list --detail`(설정 파일)과 MCP `list_profiles`(데몬)로 대조한다. 프로필이
+`scripts/check_registration.py`가 `--list --json` 출력과 `--apply` 직후 MCP `list_profiles`를
+대조한다. `--disk`와 `--daemon`은 파일 경로 또는 `-`(stdin)이다. 프로필이
 목적(`notes`의 용도)대로 동작하는지 실제 작업을 시켜 품질로 판정하는 일은
-`profile-test-run`이 맡는다. 데몬이 현재 어떤 프로필 배열을 들고 있는지 묻는 CLI 명령은
-없다.
+`profile-test-run`이 맡는다. 데몬이 현재 어떤 프로필 배열을 들고 있는지 묻는 CLI 명령은 없다.
 
 `--rollback`은 이름 규칙과 위치로 대상을 거른다.
 `<config 파일명>.profile-setup.<apply|rollback>.<시각>.<uuid>.bak` 형태가 아니거나 대상 설정과

@@ -2,11 +2,11 @@
 """프로필 테스트 진행 상태를 들고 있다가 보고 form을 그린다.
 
 에이전트를 띄우는 것은 MCP `create_agent`이므로 이 스크립트가 하지 않는다.
-이 스크립트는 대기·실행·완료를 세어 동시 실행 상한을 지키게 하고, 세 축의
-판정을 모아 두었다가 마지막에 form 하나로 출력한다. 긴 실행 도중 맥락이
+이 스크립트는 대기·실행·완료를 세어 동시 실행 상한을 지키게 하고, 라우팅·품질
+두 축의 판정을 모아 두었다가 마지막에 form 하나로 출력한다. 긴 실행 도중 맥락이
 잘려도 상태가 파일에 남아 있어 이어서 진행할 수 있다.
 
-종료 코드: 0 정상, 2 입력·실행 오류.
+종료 코드: 0 정상, 1 init --check-only에서 config·daemon 목록 불일치(--disk를 생략하면 대조를 못 해 미판정으로 1이 나온다. 그 1은 목록 불일치가 아니라 --disk가 없다는 뜻이다), 2 입력·실행 오류.
 """
 
 from __future__ import annotations
@@ -258,26 +258,30 @@ def extract_profiles(payload) -> list[dict]:
 
 
 def cmd_init(args) -> int:
-    # 기존 원장을 덮어쓰면 제외·판정 불가로 끝난 항목을 큐로 되돌릴 수 있다.
-    # 새 테스트는 새 state 경로에서 시작해야 한다.
-    existing = read_state(args.state) if Path(args.state).exists() else None
-    reason = validate_ledger_change(
-        existing, None, command="init", changes={"values": {"profiles": True}, "findings": []},
-    )
-    if reason:
-        print(f"오류: {reason}", file=sys.stderr)
-        return 2
+    if not args.check_only:
+        if not args.state:
+            print("오류: --state가 필요합니다.", file=sys.stderr)
+            return 2
+        # 기존 원장을 덮어쓰면 제외·판정 불가로 끝난 항목을 큐로 되돌릴 수 있다.
+        # 새 테스트는 새 state 경로에서 시작해야 한다.
+        existing = read_state(args.state) if Path(args.state).exists() else None
+        reason = validate_ledger_change(
+            existing, None, command="init", changes={"values": {"profiles": True}, "findings": []},
+        )
+        if reason:
+            print(f"오류: {reason}", file=sys.stderr)
+            return 2
 
     daemon = {p.get("id"): p for p in extract_profiles(load_json(args.daemon))}
 
     # 큐를 daemon 기준으로만 만들면 config.json에만 있는 프로필이 ledger에 없어
-    # 등록 실패인데도 보고에서 통째로 빠진다. 합집합으로 만들어 그런 증발을 막는다.
+    # 보고에서 통째로 빠진다. 합집합으로 만들어 그런 증발을 막는다.
     if args.disk:
         disk = {p.get("id"): p for p in extract_profiles(load_json(args.disk))}
     else:
         disk = {}
         print("경고: --disk가 없어 config.json 쪽을 대조하지 못합니다. "
-              "등록 검증(축1)은 '판정 불가'로 남습니다.", file=sys.stderr)
+              "config·daemon 목록 대조는 '미판정'으로 남습니다.", file=sys.stderr)
 
     entries = []
     for pid in sorted(set(daemon) | set(disk), key=lambda x: (x is None, str(x))):
@@ -288,28 +292,18 @@ def cmd_init(args) -> int:
             "id": pid, "name": base.get("name") or pid, "icon": base.get("icon"),
             "notes": base.get("notes", ""), "source": source,
             "state": "queued", "agentId": None, "blocked": None,
-            "registration": None, "routing": None, "quality": None,
+            "routing": None, "quality": None,
             "unresolved": None, "findings": [],
         }
-        # 한쪽에만 있다는 것 자체가 등록 검증 실패다. 이 판정은 init이 소유한다.
-        # 나중에 record --registration-file이 같은 finding을 다시 넣지 않게 막는다.
+        # 한쪽에만 있는 프로필은 띄울 수 없다. daemon에 없으면 프로필 값을 못 읽고,
+        # 디스크에 없으면 테스트해도 설정에 남지 않는다. 실행 대상에서 빼되
+        # 보고에는 남겨야 하므로 별도 상태로 표시하고 사유를 붙인다.
+        # blocked는 init에서만 서고 이후 어떤 호출로도 풀리지 않는다.
         if source != "both" and args.disk:
-            entry["registration"] = "FAIL"
-            entry["findings"].append({
-                "axis": "registration",
-                "text": ("config.json에만 있고 daemon이 로드하지 않았다. reload가 안 됐을 수 있다."
-                         if source == "disk-only"
-                         else "daemon에만 있고 config.json에 없다. 디스크 반영이 빠졌거나 다른 config를 읽고 있다."),
-            })
-            # 한쪽에만 있는 프로필은 띄울 수 없다. daemon에 없으면 프로필 값을 못 읽고,
-            # 디스크에 없으면 테스트해도 설정에 남지 않는다. 실행 대상에서 빼되
-            # 보고에는 남겨야 하므로 별도 상태로 표시하고 사유를 붙인다.
-            # blocked는 init에서만 서고 이후 어떤 호출로도 풀리지 않는다. 등록이 깨진
-            # 프로필이 뒤늦은 기록으로 PASS처럼 보이는 것을 막는 불변식이다.
             entry["state"] = "excluded"
             entry["blocked"] = source
-            entry["unresolved"] = ("한쪽에만 등록돼 있어 에이전트를 띄우지 못했다"
-                                   f" ({source}). 등록을 맞춘 뒤 다시 테스트한다.")
+            entry["unresolved"] = ("config·daemon 목록 불일치로 이번 실행 대상이 아니다"
+                                   f" ({source}). 목록을 맞춘 뒤 다시 테스트한다.")
         entries.append(entry)
 
     if args.only:
@@ -330,17 +324,20 @@ def cmd_init(args) -> int:
         "requested": len(entries),
         "profiles": entries,
     }
-    write_state(args.state, state)
+    if not args.check_only:
+        write_state(args.state, state)
     runnable = [e for e in entries if e["state"] == "queued"]
     print(f"프로필 {len(entries)}개 중 {len(runnable)}개를 큐에 넣었습니다. 동시 실행 상한 {cap}개.")
     print("대상: " + ", ".join(str(e["id"]) for e in runnable))
     odd = [e for e in entries if e["source"] != "both"]
     if odd and args.disk:
-        print("한쪽에만 등록돼 등록 검증 실패, 실행 대상에서 제외: "
+        print("config·daemon 목록 불일치로 이번 실행 대상 아님: "
               + ", ".join(f"{e['id']}({e['source']})" for e in odd))
     elif odd:
         # --disk가 없으면 대조 자체를 못 했으므로 실패라고 부르면 안 된다.
-        print("등록 검증 미판정(--disk 없음): " + ", ".join(str(e["id"]) for e in odd))
+        print("목록 대조 미판정(--disk 없음): " + ", ".join(str(e["id"]) for e in odd))
+    if args.check_only:
+        return 1 if odd else 0
     return 0
 
 
@@ -397,7 +394,7 @@ def validate_ledger_change(state: dict | None, entry: dict | None, *, command: s
 
     has_changes = bool(changes.get("values") or changes.get("findings"))
     if entry.get("state") == "excluded" or entry.get("blocked"):
-        terminal = "등록 검증 실패로 집계에서 제외된 상태"
+        terminal = "config·daemon 목록 불일치로 실행 대상이 아닌 상태"
     elif entry.get("state") == "done" and entry.get("unresolved"):
         terminal = "판정 불가로 종료된 상태"
     elif entry.get("state") == "done":
@@ -418,8 +415,6 @@ def validate_ledger_change(state: dict | None, entry: dict | None, *, command: s
 
     if command == "record":
         sources = changes.get("sources", {})
-        if len(sources.get("registration", [])) > 1:
-            return "등록 판정은 --registration 또는 --registration-file 중 하나만 지정하세요."
         if len(sources.get("routing", [])) > 1:
             return "라우팅 판정은 --routing 또는 --routing-file 중 하나만 지정하세요."
 
@@ -433,7 +428,6 @@ def validate_ledger_change(state: dict | None, entry: dict | None, *, command: s
         # 새 값에 말없이 덮인다. --unresolved가 품질을 지우는 것은 이 축 자체를
         # 다시 겨냥한 것이 아니라 종료 판정이 채점을 대신하는 것이라 여기 걸리지 않는다.
         attempted_axis = {
-            "registration": bool(sources.get("registration")),
             "routing": bool(sources.get("routing")),
             "quality": bool(requested.get("quality")),
         }
@@ -472,15 +466,13 @@ def axis_result_for_profile(path: str, *, axis: str, profile_id: str,
 
     check_routing.py의 출력은 {"axis": ..., "results": [{"id": ..., ...}]} 형태다. 파일이
     다른 축에서 나왔거나 다른 프로필의 것이면 값은 그럴듯해 보여도 이 판정의 근거가
-    아니다. registration-file과 routing-file 양쪽이 이 함수 하나로 대조하므로 기준이
-    갈라지지 않는다.
+    아니다.
 
     axis="routing"은 실제로 뜬 에이전트를 측정한 결과라 결과 항목에 agentId가 함께
     실린다. expected_agent_id(launched로 ledger에 기록된 그 프로필의 agentId)와 다르면
     다른 에이전트를 측정한 결과이고, 결과 항목에 agentId 자체가 없으면 무엇을 측정했는지
     알 수 없다 — cmd_brief가 활동 기록의 출처를 agentId로 대조해 거부하는 것과 같은
-    기준이다. axis="registration"은 에이전트를 띄우기 전에 판정하므로 agentId가 없고,
-    이 대조를 하지 않는다.
+    기준이다.
     """
     payload = load_json(path)
     if not isinstance(payload, dict):
@@ -523,10 +515,6 @@ def cmd_record(args) -> int:
     changes = {
         "values": {}, "findings": [],
         "sources": {
-            "registration": [name for name, present in (
-                ("--registration", bool(args.registration)),
-                ("--registration-file", bool(args.registration_file)),
-            ) if present],
             "routing": [name for name, present in (
                 ("--routing", bool(args.routing)),
                 ("--routing-file", bool(args.routing_file)),
@@ -539,26 +527,6 @@ def cmd_record(args) -> int:
             "done": bool(args.done),
         },
     }
-
-    if args.registration_file:
-        mine, error = axis_result_for_profile(args.registration_file, axis="registration",
-                                              profile_id=args.profile_id)
-        if error:
-            print(f"오류: {error}", file=sys.stderr)
-            return 2
-        changes["values"]["registration"] = "PASS" if mine.get("passed") else "FAIL"
-        bad = [f for f in mine.get("fields", []) if not f.get("match")]
-        for field in bad:
-            changes["findings"].append({
-                "axis": "registration", "field": field.get("field"),
-                "expected": field.get("expected"), "actual": field.get("actual"),
-            })
-        # 한쪽에만 있는 경우의 사유는 init이 이미 기록했다. 여기서 또 넣으면 같은
-        # finding이 두 건이 된다. 양쪽에 있는데 필드 비교가 비어 있을 때만 남긴다.
-        if not mine.get("passed") and not bad and entry.get("source") == "both":
-            changes["findings"].append({"axis": "registration", "text": mine.get("reason", "")})
-    elif args.registration:
-        changes["values"]["registration"] = args.registration
 
     if args.routing_file:
         mine, error = axis_result_for_profile(args.routing_file, axis="routing",
@@ -857,7 +825,7 @@ def cmd_report(args) -> int:
 
     # 한글이 들어가는 name은 맨 뒤에 둔다. 뒤에 아무 열도 없으면 폭이 어긋나도
     # 앞 열의 정렬이 깨지지 않는다.
-    headers = ["등록", "라우팅", "품질", "ID", "프로필"]
+    headers = ["라우팅", "품질", "ID", "프로필"]
     def quality_cell(p) -> str:
         score = scores[p["id"]]
         if score is not None:
@@ -866,17 +834,16 @@ def cmd_report(args) -> int:
         return "N/A" if p.get("unresolved") else "—"
 
     table = [
-        [mark(p, p.get("registration")), mark(p, p.get("routing")), quality_cell(p),
+        [mark(p, p.get("routing")), quality_cell(p),
          str(p["id"]), f"{profile_emoji(p.get('icon'))} {p['name']}"]
         for p in rows
     ]
     widths = [max(dwidth(h), *(dwidth(r[i]) for r in table)) if table else dwidth(h)
               for i, h in enumerate(headers)]
 
-    passed = sum(1 for p in rows
-                 if p.get("registration") == "PASS" and p.get("routing") == "PASS")
+    passed = sum(1 for p in rows if p.get("routing") == "PASS")
     print(RULE)
-    print(f"📊 프로필 테스트 결과 — 프로필 {len(rows)}개 중 결정론 2축 통과 {passed}개")
+    print(f"📊 프로필 테스트 결과 — 프로필 {len(rows)}개 중 라우팅 통과 {passed}개")
     print(RULE)
     print()
     print("  ".join(pad(h, w) for h, w in zip(headers, widths)).rstrip())
@@ -897,7 +864,6 @@ def cmd_report(args) -> int:
                 print(f"  {pad(p['id'], w_id)}  {f['field']}: "
                       f"기대 {f['expected']!r} → 실제 {f['actual']!r}")
 
-    section("registration", "⚠️ 등록 불일치 — config.json과 daemon이 다르다")
     section("routing", "⚠️ 라우팅 불일치 — 프로필대로 뜨지 않았다")
 
     graded = [p for p in rows if p.get("quality")]
@@ -965,11 +931,14 @@ def main() -> int:
     p_init = sub.add_parser("init", help="테스트 대상을 큐에 넣습니다.")
     p_init.add_argument("--daemon", required=True, help="MCP list_profiles 출력 경로. '-'면 stdin.")
     p_init.add_argument("--disk", help="manage_profiles.py --list --json 출력 경로. "
-                                       "생략하면 등록 검증을 하지 못합니다.")
-    p_init.add_argument("--state", required=True, help="상태 파일 경로.")
+                                       "생략하면 config·daemon 목록 대조를 하지 못합니다. "
+                                       "그 경우 --check-only 종료 코드가 1이 됩니다.")
+    p_init.add_argument("--state", help="상태 파일 경로.")
     p_init.add_argument("--only", help="선별 테스트할 프로필 id를 쉼표로 구분해 지정합니다.")
     p_init.add_argument("--max-concurrent", type=int, default=MAX_CONCURRENT,
                         help=f"동시 실행 상한. 기본이자 최대 {HARD_CAP}. 더 큰 값은 {HARD_CAP}으로 제한됩니다.")
+    p_init.add_argument("--check-only", action="store_true",
+                        help="상태 파일을 쓰지 않고 config·daemon 목록 대조 결과만 보여줍니다.")
     p_init.set_defaults(func=cmd_init)
 
     p_next = sub.add_parser("next", help="지금 띄울 프로필을 상한 안에서 알려줍니다.")
@@ -985,10 +954,7 @@ def main() -> int:
     p_rec = sub.add_parser("record", help="판정 결과를 기록합니다.")
     p_rec.add_argument("--state", required=True)
     p_rec.add_argument("--profile-id", required=True)
-    p_rec.add_argument("--registration", choices=["PASS", "FAIL"], help="축1 판정을 직접 지정합니다.")
-    p_rec.add_argument("--registration-file",
-                       help="check_routing.py registration --json 출력 경로. 불일치 필드까지 가져옵니다.")
-    p_rec.add_argument("--routing", choices=["PASS", "FAIL"], help="축2 판정을 직접 지정합니다.")
+    p_rec.add_argument("--routing", choices=["PASS", "FAIL"], help="축1 판정을 직접 지정합니다.")
     p_rec.add_argument("--routing-file", help="check_routing.py routing --json 출력 경로. 불일치 필드까지 가져옵니다.")
     p_rec.add_argument("--quality-file", help="심판이 낸 채점 JSON 경로.")
     p_rec.add_argument("--note", help="보고에 남길 한 줄 메모.")

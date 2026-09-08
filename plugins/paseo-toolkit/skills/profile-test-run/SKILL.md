@@ -1,6 +1,6 @@
 ---
 name: profile-test-run
-description: Paseo 에이전트 프로필이 자기 notes가 약속한 일을 실제로 잘 해내는지 확인할 때 사용한다. "프로필 테스트해줘", "프로필 잘 도는지 확인해줘", "프로필대로 뜨는지 봐줘", "프로필 라우팅 검증해줘", "프로필 전체 한 번 돌려봐", "이 프로필 제대로 먹는지 봐줘" 같은 요청에 적용하고, profile-setup으로 프로필을 등록한 직후 "방금 만든 프로필 테스트해볼까요"에 사용자가 동의한 흐름도 이어받는다. 등록된 값이 config.json과 daemon에서 일치하는지, 실제로 뜬 에이전트의 model·mode·thinking·features가 프로필과 같은지를 확인한 뒤, 그 notes에 맞는 실제 작업을 시켜 결과 품질을 별도 심판 에이전트로 채점해 합불을 낸다. 프로필을 설계·등록·조회·삭제하는 요청은 이 스킬이 아니라 profile-setup이 맡는다.
+description: Paseo 에이전트 프로필이 자기 notes가 약속한 일을 실제로 잘 해내는지 확인할 때 사용한다. "프로필 테스트해줘", "프로필 잘 도는지 확인해줘", "프로필대로 뜨는지 봐줘", "프로필 라우팅 검증해줘", "프로필 전체 한 번 돌려봐", "이 프로필 제대로 먹는지 봐줘" 같은 요청에 적용하고, profile-setup으로 프로필을 등록한 직후 "방금 만든 프로필 테스트해볼까요"에 사용자가 동의한 흐름도 이어받는다. 실제로 뜬 에이전트의 model·mode·thinking·features가 프로필과 같은지를 확인한 뒤, 그 notes에 맞는 실제 작업을 시켜 결과 품질을 별도 심판 에이전트로 채점해 합불을 낸다. 프로필을 설계·등록·조회·삭제하는 요청은 이 스킬이 아니라 profile-setup이 맡는다.
 ---
 
 # Paseo 프로필 테스트 실행
@@ -8,15 +8,14 @@ description: Paseo 에이전트 프로필이 자기 notes가 약속한 일을 �
 프로필은 사람이 정한 시작 구성 묶음일 뿐이라, 등록했다고 그대로 뜬다는 보장이 없다.
 이 스킬이 내리는 판정은 **프로필이 자기 `notes`가 약속한 일을 실제로 해내는가**이다.
 전제가 깨진 채로 품질만 재면 무엇을 테스트했는지 알 수 없다.
-그래서 에이전트를 **실제로 띄워** 등록·라우팅·품질을 순서대로 본다.
+그래서 에이전트를 **실제로 띄워** 라우팅·품질을 순서대로 본다.
 
 | 축 | 묻는 것 | 판정 방법 |
 | --- | --- | --- |
-| 1. 등록 (전제) | config.json에 쓴 값을 daemon이 그대로 로드했는가 | 결정론 — `scripts/check_routing.py registration` |
-| 2. 라우팅 (전제) | 실제로 뜬 에이전트가 프로필 값과 같은가 | 결정론 — `scripts/check_routing.py routing` |
-| 3. 품질 (판정) | 프로필이 자기 `notes`가 약속한 일을 해내는가 | 별도 심판 에이전트가 채점 |
+| 1. 라우팅 (전제) | 실제로 뜬 에이전트가 프로필 값과 같은가 | 결정론 — `scripts/check_routing.py routing` |
+| 2. 품질 (판정) | 프로필이 자기 `notes`가 약속한 일을 해내는가 | 별도 심판 에이전트가 채점 |
 
-**세 축을 섞지 않는 것이 이 스킬의 핵심이다.** 라우팅이 어긋난 채로 작업만 잘 나오면
+**두 축을 섞지 않는 것이 이 스킬의 핵심이다.** 라우팅이 어긋난 채로 작업만 잘 나오면
 품질 점수에 묻혀 원인을 놓친다. 반대로 라우팅이 맞는데 결과가 나쁘면 그건 프로필
 구성이 아니라 `notes`와 모델 선택의 문제다. 원인이 다르면 고칠 곳도 다르다.
 
@@ -28,7 +27,7 @@ description: Paseo 에이전트 프로필이 자기 notes가 약속한 일을 �
 
 **정리를 먼저 하면 채점 재료가 사라진다.** `archive_agent`는 실행 중이면 중단시키고
 목록에서 치운다. 채점은 그 에이전트가 무엇을 했는지를 재료로 삼으므로, 활동을
-회수하기 전에 정리하면 축3을 아예 판정할 수 없다. 순서를 뒤집지 마라.
+회수하기 전에 정리하면 축2를 아예 판정할 수 없다. 순서를 뒤집지 마라.
 
 ## 절차
 
@@ -57,33 +56,46 @@ python ../../scripts/manage_profiles.py --list
 ```bash
 python ../../scripts/manage_profiles.py --list --json > disk.json
 # daemon.json 은 MCP list_profiles 결과를 저장한 파일이다.
+python scripts/testrun_ledger.py init --daemon daemon.json --disk disk.json --check-only
+python scripts/testrun_ledger.py init --daemon daemon.json --disk disk.json --check-only --only explore,review
+```
+
+**`--disk`와 `--daemon`을 둘 다 준다.** `--check-only`에서 `--state`는 선택이고, 줘도
+그 경로를 읽거나 쓰지 않아 기존 원장이 있어도 거절하지 않는다. `--check-only` 없는
+진짜 `init`은 `--state`가 필수이고, 기존 원장이 있으면 덮어쓰기를 거부하고 종료 코드
+2다. 새 테스트는 없는 `--state` 경로에서 시작한다. `--only`는 `--check-only`에도
+적용되고, 종료 코드는 필터 뒤에 남는다.
+
+`--disk`가 있으면 `source != "both"`인 항목(disk-only와 daemon-only 둘 다)을
+`excluded`/`blocked`/`unresolved`로 실행에서 뺀다. `--disk`를 생략하면 제외하지
+않고 미판정으로 남지만, daemon 프로필이 전부 `source="daemon-only"`가 되어
+`--check-only` 종료 코드는 1이다. 그 1은 목록 불일치가 아니라 `--disk`가 없다는
+뜻이다. `paseo` CLI가 없어 디스크 쪽을 못 읽을 때만 `--disk`를 빼고, 그때는
+종료 코드 1을 리로드 근거로 쓰지 마라.
+
+상태 파일은 저장소가 아니라 임시 디렉터리에 둔다. 테스트 부산물을 저장소에 커밋하지 않는다.
+
+질문은 스킬 본문이 한다. 스크립트는 판단 재료만 낸다. stdin 프롬프트는 없고 입력은
+파일·플래그, 출력은 JSON·stderr 요약뿐이다.
+
+1. `init --check-only`로 config와 daemon 목록을 대조한다.
+2. 불일치가 있으면(종료 코드 1) 사용자에게 **「데몬을 리로드할까요?」를 묻는다.**
+3. 리로드한다고 하면 `paseo daemon reload`를 실행하고, 성공(종료 코드)을 확인한 뒤
+   daemon 목록을 MCP `list_profiles`로 **다시 받아** `init --check-only`를 **다시 돌려**
+   불일치가 해소됐는지 재확인한 다음 진짜 `init`으로 넘어간다. 이 재확인을 빠뜨리지
+   마라. reload가 실패했는데 그대로 진행하면 프로필이 여전히 빠지는 것을 사용자가 모른다.
+4. 리로드하지 않는다고 하면 「지금 테스트되는 프로필 목록」과 「테스트되지 않는(config 쪽)
+   차이」를 안내한다. `--check-only` stdout의 `대상:` 줄과
+   `config·daemon 목록 불일치로 이번 실행 대상 아님:` 줄이 그 재료다.
+5. 그래도 테스트하겠다고 하면 `--check-only` 없이 진짜 `init`을 돌려 진행한다.
+   제외된 프로필은 큐에 들어가지 않는다.
+
+```bash
 python scripts/testrun_ledger.py init --daemon daemon.json --disk disk.json --state state.json
 python scripts/testrun_ledger.py init --daemon daemon.json --disk disk.json --state state.json --only explore,review
 ```
 
-**`--disk`와 `--daemon`을 둘 다 준다.** `init`은 두 쪽의 합집합으로 큐를 만들고 한쪽에만
-있는 프로필을 등록 실패로 확정해 실행에서 뺀다. `--disk`를 생략하면 등록은 **미판정**으로
-남는다. `paseo` CLI가 없어 디스크 쪽을 못 읽을 때만 그렇게 진행한다.
-
-상태 파일은 저장소가 아니라 임시 디렉터리에 둔다. 테스트 부산물을 저장소에 커밋하지 않는다.
-
-### 2. 축1 — 등록 검증
-
-디스크에 쓴 값과 daemon이 로드한 값을 대조한다. config.json을 고쳤는데 reload가 안 됐으면
-daemon은 옛 값으로 계속 뜬다. 이 축이 그걸 잡는다.
-
-```bash
-python scripts/check_routing.py registration --disk disk.json --daemon daemon.json --json > reg.json
-```
-
-이 축은 **프로필의 모든 필드**를 본다. 라우팅 필드만 보면 `notes`가 어긋나도 통과하는데,
-`notes`가 잘못 로드되면 프로필은 값이 다 맞아도 제 역할을 못 한다. 축2는 런타임이 갖는
-값만 본다. 두 축의 비교 범위를 섞지 마라.
-
-종료 코드는 0이 일치, 1이 불일치, 2가 입력·실행 오류다. 2가 나오면 판정이 아니라
-스크립트가 못 돈 것이니 결과를 PASS로 기록하지 마라.
-
-### 3. 프로브 지시 만들기
+### 2. 프로브 지시 만들기
 
 각 프로필에 줄 작업을 **그 프로필의 `notes`에서 뽑는다.** `notes`가 라우팅의 유일한
 근거이므로, 테스트도 `notes`가 약속한 범위 안의 작은 작업이어야 한다. 프로필마다 맡는
@@ -97,7 +109,7 @@ python scripts/check_routing.py registration --disk disk.json --daemon daemon.js
 건드릴 만한 실마리를 일부러 넣는다 — 예를 들어 리뷰 프로필에는 고치고 싶어질 만한
 결함을 하나 포함시킨다. 그래야 실제로 고치는지 지적만 하는지가 활동 기록에서 드러난다.
 
-### 4. 띄우기 — 동시 실행 5개까지
+### 3. 띄우기 — 동시 실행 5개까지
 
 **동시 실행은 최대 5개다.** 5개만 테스트한다는 뜻이 아니라 한 번에 5개까지만 돈다는
 뜻이다. 프로필이 11개면 5개를 돌리다가 하나가 끝날 때마다 다음 하나를 채워 결국 11개를
@@ -135,7 +147,7 @@ python scripts/testrun_ledger.py next --state state.json     # 지금 띄울 프
 python scripts/testrun_ledger.py launched --state state.json --profile-id explore --agent-id <agent id>
 ```
 
-### 5. 축2 — 라우팅 검증
+### 4. 축1 — 라우팅 검증
 
 각 에이전트가 뜨면 MCP `get_agent_status`로 실제 값을 읽어 프로필과 대조한다.
 `list_agents`는 `modeId`와 `features`를 주지 않으므로 이 축에 쓸 수 없다.
@@ -158,7 +170,10 @@ Paseo 쪽 문제로 볼지 판단할 수 있다.
 프로필이 `featureValues`를 선언하지 않았으면 그 항목은 판정하지 않고 참고로만 남긴다.
 선언하지 않은 값은 provider 기본값이라 불일치가 아니다.
 
-### 6. 축3 — 심판 채점
+종료 코드는 0이 일치, 1이 불일치, 2가 입력·실행 오류다. 2가 나오면 판정이 아니라
+스크립트가 못 돈 것이니 결과를 PASS로 기록하지 마라.
+
+### 5. 축2 — 심판 채점
 
 작업이 끝나면 MCP `get_agent_activity`로 그 에이전트의 활동을 회수한다.
 
@@ -167,7 +182,7 @@ Paseo 쪽 문제로 볼지 판단할 수 있다.
 요약이 아니라 플랫폼이 남긴 활동 기록이다.
 
 채점은 **별도 심판 에이전트**가 한다. 심판에게는 프로필의 `notes`와 프로브 지시와
-활동 기록을 직접 주고, 테스트 워커의 결과 보고와 축1·축2 판정은 주지 않는다.
+활동 기록을 직접 주고, 테스트 워커의 결과 보고와 축1 판정은 주지 않는다.
 
 브리핑을 손으로 조립하지 말고 스크립트가 만들게 한다. 호출자가 문장을 짜 넣을수록
 워커의 자기 보고가 섞일 자리가 생기기 때문이다.
@@ -200,7 +215,7 @@ python scripts/testrun_ledger.py brief --state state.json --profile-id explore \
 
 ```bash
 python scripts/testrun_ledger.py record --state state.json --profile-id explore \
-  --registration-file reg.json --routing-file routing_explore.json \
+  --routing-file routing_explore.json \
   --quality-file judge_explore.json --done
 ```
 
@@ -209,7 +224,7 @@ python scripts/testrun_ledger.py record --state state.json --profile-id explore 
 
 `--done`이 그 프로필의 자리를 비우므로, 기록한 뒤 `next`를 부르면 다음 프로필이 나온다.
 
-### 6-1. 판정하지 못했을 때
+### 5-1. 판정하지 못했을 때
 
 에이전트가 중단됐거나 활동을 회수하지 못하면 그 프로필은 채점할 수 없다. 그대로 두면
 `running` 자리가 영영 비지 않아 남은 프로필이 시작되지 못한다. 사유를 적어 종료로
@@ -223,19 +238,19 @@ python scripts/testrun_ledger.py record --state state.json --profile-id explore 
 자리가 돌아오고, 그 프로필은 보고에 `N/A`와 「판정 불가」로 남는다. 실패한 것을 조용히
 빼지 않는 것이 중요하다 — 사용자는 전체를 요청했으므로 빠진 것이 있으면 알아야 한다.
 
-### 6-2. 맥락이 잘린 뒤 이어서 진행하기
+### 5-2. 맥락이 잘린 뒤 이어서 진행하기
 
-`record`는 축(등록·라우팅·품질)마다 판정을 한 번만 허용한다. 이미 기록된 축을 다시
+`record`는 축(라우팅·품질)마다 판정을 한 번만 허용한다. 이미 기록된 축을 다시
 지정하면 값이 같든 다르든 종료 코드 2로 거부하고, 묶음 명령이 원자적이라 함께 준
 `--done`을 포함해 아무것도 반영되지 않는다 — 이전 판정이 말없이 덮이는 것을 막으려는
 의도된 동작이다.
 
 맥락이 잘린 뒤에는 위 예시를 그대로 재실행하지 말고 먼저 `report --state state.json`으로
-그 프로필의 등록·라우팅·품질 칸부터 확인한다(거부 메시지도 어느 축에 판정이 있는지
-알려준다). 이미 판정이 있는 축의 `--registration-file`/`--routing-file`/`--quality-file`은
+그 프로필의 라우팅·품질 칸부터 확인한다(거부 메시지도 어느 축에 판정이 있는지
+알려준다). 이미 판정이 있는 축의 `--routing-file`/`--quality-file`은
 빼고, 아직 `—`인 축과 `--done`만 다시 넘긴다.
 
-### 7. 정리
+### 6. 정리
 
 정리는 MCP **`archive_agent`**로 한다 — 채점 뒤에만 정리한다는 순서는 앞의
 「순서를 지켜야 하는 이유」와 같다.
@@ -249,7 +264,7 @@ python scripts/testrun_ledger.py record --state state.json --profile-id explore 
 정리 대상은 이 테스트가 띄운 에이전트뿐이다. `labels`의 `task: profile-test-run`으로
 확인하고 지운다. 사용자의 다른 작업 에이전트를 건드리지 마라.
 
-### 8. 보고
+### 7. 보고
 
 ```bash
 python scripts/testrun_ledger.py report --state state.json
@@ -263,20 +278,13 @@ python scripts/testrun_ledger.py report --state state.json
 
 ```text
 ━━━━━━━━━━━━━━━━
-📊 프로필 테스트 결과 — 프로필 3개 중 결정론 2축 통과 0개
+📊 프로필 테스트 결과 — 프로필 2개 중 라우팅 통과 1개
 ━━━━━━━━━━━━━━━━
 
-등록  라우팅  품질   ID            프로필
-────  ──────  ─────  ────────────  ────────────
-PASS  FAIL    4.5/5  explore       🔍 탐색
-FAIL  N/A     N/A    ghost-daemon  🐛 유령 데몬
-FAIL  PASS    N/A    run-command   ⌨️ 명령 실행
-
-━━━━━━━━━━━━━━━━
-⚠️ 등록 불일치 — config.json과 daemon이 다르다
-━━━━━━━━━━━━━━━━
-  ghost-daemon  daemon에만 있고 config.json에 없다. 디스크 반영이 빠졌거나 다른 config를 읽고 있다.
-  run-command   notes: 기대 'NOTES가 디스크에서만 다르다' → 실제 '실행할 명령이 정해진 작업에 사용'
+라우팅  품질   ID            프로필
+──────  ─────  ────────────  ────────────
+FAIL    4.5/5  explore       🔍 탐색
+PASS    N/A    run-command   ⌨️ 명령 실행
 
 ━━━━━━━━━━━━━━━━
 ⚠️ 라우팅 불일치 — 프로필대로 뜨지 않았다
@@ -301,13 +309,12 @@ FAIL  PASS    N/A    run-command   ⌨️ 명령 실행
 ━━━━━━━━━━━━━━━━
 🚫 판정 불가 — 테스트를 끝내지 못했다
 ━━━━━━━━━━━━━━━━
-  ghost-daemon  한쪽에만 등록돼 있어 에이전트를 띄우지 못했다 (daemon-only). 등록을 맞춘 뒤 다시 테스트한다.
   run-command   에이전트가 중단돼 활동을 회수하지 못했다
 
-대상 3개 · 보고 3개
+대상 2개 · 보고 2개
 ```
 
-요약표는 세 축을 각각 다른 열에 두어 한 축의 실패가 다른 축에 묻히지 않게 한다. 품질
+요약표는 두 축을 각각 다른 열에 두어 한 축의 실패가 다른 축에 묻히지 않게 한다. 품질
 점수에 `/5`를 붙이는 것은 점수만으로는 몇 점 만점인지 알 수 없기 때문이다. 불일치는 표
 아래에 축별로 모아 무엇이 어떻게 어긋났는지 값까지 적는다.
 
@@ -326,13 +333,13 @@ FAIL  PASS    N/A    run-command   ⌨️ 명령 실행
 직접 읽으므로, 같은 프로필이 두 스킬에서 다른 이모지로 보이지 않는다. `icon`이 없거나
 매핑에 없으면 기본 이모지(`🔹`)로 채운다. 비워 두면 정렬이 어긋난다.
 
-보고를 사용자에게 낼 때 세 축의 의미를 한 줄씩 덧붙인다. `등록`과 `라우팅`이 무엇을
+보고를 사용자에게 낼 때 두 축의 의미를 한 줄씩 덧붙인다. `라우팅`과 `품질`이 무엇을
 구분하는지 모르면 어느 쪽을 고쳐야 할지 판단할 수 없다.
 
 ## 반복 횟수
 
 **기본은 프로필당 1회다.** 프로필이 11개면 11회고, 3회씩 돌리면 33개 세션이라
-토큰과 시간이 몇 배로 든다. 결정론 두 축은 한 번만 봐도 결론이 같고, 반복이 의미
+토큰과 시간이 몇 배로 든다. 결정론 축(라우팅)은 한 번만 봐도 결론이 같고, 반복이 의미
 있는 것은 품질 축뿐이다.
 
 품질 판정은 이 스킬이 내리는 결론 자체이므로 점수 하나만으로 반복 여부를 정하지 않는다.
