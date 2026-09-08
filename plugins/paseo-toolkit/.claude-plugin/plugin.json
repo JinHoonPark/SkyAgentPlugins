@@ -1,6 +1,6 @@
 {
   "name": "paseo-toolkit",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "Operate Paseo agents and daemon: orchestrate staged workflows, configure agent profiles, and report results.",
   "author": {
     "name": "Sky"
