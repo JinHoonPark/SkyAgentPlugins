@@ -1703,33 +1703,23 @@ def emit_human_profile_list(profiles: list[Any], detail: bool) -> None:
             if notes is not None:
                 lines.extend(f"    {line}" for line in notes.splitlines() or [""])
     else:
-        identifiers = [human_profile_value(profile.get("id")) or "-" for profile in profile_mappings]
-        number_width = len(str(len(profile_mappings)))
-        id_width = max(len(identifier) for identifier in identifiers)
-        for index, (profile, identifier) in enumerate(zip(profile_mappings, identifiers), start=1):
+        for index, profile in enumerate(profile_mappings, start=1):
             if index > 1:
                 lines.append("")
-            details = (
-                combined_profile_value(profile, ("provider", "model"), "/"),
-                human_profile_value(profile.get("thinkingOptionId")),
-                human_profile_value(profile.get("modeId")),
-            )
-            rendered_details = [value for value in details if value is not None]
-            first_line = f"{index:>{number_width}}  {identifier:<{id_width}}"
-            if rendered_details:
-                first_line += f"  {' · '.join(rendered_details)}"
-            lines.append(first_line)
-
-            label = " · ".join(
-                value
-                for value in (
-                    human_profile_value(profile.get("name")),
-                    single_line_profile_value(profile.get("notes")),
-                )
-                if value is not None
-            )
+            identifier = human_profile_value(profile.get("id")) or "-"
+            name = human_profile_value(profile.get("name")) or ""
             emoji = ICON_EMOJI.get(human_profile_value(profile.get("icon")), DEFAULT_PROFILE_ICON_EMOJI)
-            lines.append(f"    {emoji}" + (f" {label}" if label else ""))
+            lines.append(f"#{index} [ {emoji} {name} ({identifier}) ]")
+
+            provider_model = combined_profile_value(profile, ("provider", "model"), "/")
+            thinking = human_profile_value(profile.get("thinkingOptionId"))
+            second_line = f"      - {provider_model or ''}"
+            if thinking is not None:
+                second_line += f" [ {thinking} ]"
+            lines.append(second_line)
+
+            notes = single_line_profile_value(profile.get("notes")) or ""
+            lines.append(f"      - {notes}")
     payload = ("\n".join(lines) + "\n").encode("utf-8")
     stream = getattr(sys.stdout, "buffer", None)
     if stream is not None:
