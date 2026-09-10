@@ -25,6 +25,11 @@ MCP `list_providers`로 활성 provider 목록을 받는다.
 활성 provider가 하나라도 있으면 **그 provider들만** 이후 단계의 대상이다. 비활성 provider는
 후보에서 제외한다. 특정 provider를 이름으로 우대하거나 배제하지 않는다.
 
+목록에 있는데 `status`가 `available`이 아닌 provider(`error` 등)는 목록에 없는 경우가
+아니다. 조회 실패이며, 위 **활성이 하나도 없으면** 분기를 타지 않는다. 무엇을 조회하려다
+`status`가 무엇이었는지 사용자에게 알리고, 값을 추측해 채우지 않는다. 그 provider로
+프로필을 만들어야 하면 2단계의 조회 실패 분기를 탄다.
+
 ### 2단계 — 모델과 thinking 옵션 조회
 
 MCP `list_models`로 1단계 provider들의 모델 ID와 `thinkingOptions`를 받는다. 표시명이 아니라
@@ -32,7 +37,7 @@ MCP `list_models`로 1단계 provider들의 모델 ID와 `thinkingOptions`를 �
 
 **모델이 0개인 provider는 후보에서 뺀다.** provider가 활성이라는 것과 그 provider로 쓸 모델이
 있다는 것은 다르다. 프로필은 `model` 없이는 아무 에이전트도 띄우지 못하므로, 여기서 갈래가
-둘로 나뉜다.
+나뉜다.
 
 - **일부 provider만 0개다** — 그 provider만 빼고 남은 provider로 계속 진행한다. 중단하지
   않는다. 3단계 이후의 「활성 provider」는 **모델이 하나 이상 있는 provider**만 가리킨다.
@@ -42,6 +47,13 @@ MCP `list_models`로 1단계 provider들의 모델 ID와 `thinkingOptions`를 �
 
 > Paseo에 연결된 모델이 없습니다. provider는 활성이지만 쓸 수 있는 모델이 조회되지 않아
 > 지금은 프리셋을 제안할 수 없습니다. Paseo 설정에서 모델을 연결한 뒤 다시 요청해 주세요.
+
+- **`list_models`가 실패·타임아웃했다** — 모델이 0개인 것과 같이 취급하지 않는다. 그
+  provider를 "모델 없음"으로 후보에서 빼지 않고, 0개 집계에도 넣지 않는다. 무엇을
+  조회하려다 어떻게 실패했는지 사용자에게 알리고, 값을 추측해 채우지 않는다. 그
+  provider로 프로필을 만들어야 하면 `model`은 필수라 조회로 고를 수 없으니 사용자에게
+  물어 확정한다. 조회로 확인되지 않은 선택 키는 SKILL.md 1-4 「조회에 없는 선택 키는
+  생략한다」를 따른다.
 
 ### 3단계 — 등급 판정
 
@@ -112,7 +124,8 @@ provider별 mode 값과 모델별 thinking 옵션의 생김새는 [`provider-mod
 | 명령 전권 | `bypassPermissions` | `full-access` |
 
 - 표에 없는 provider는 `inspect_provider`의 `modes[].id`를 받아 제약이 큰 쪽부터 세 등급에
-  대응시킨다. 자세한 방법은 [`provider-modes.md`](provider-modes.md)에 있다.
+  대응시킨다. `modes[].id`가 빈 배열이면 `modeId` 키 자체를 생략한다. 자세한 방법은
+  [`provider-modes.md`](provider-modes.md)에 있다.
 - **명령 전권은 `run-command` 하나에만 붙인다.** codex `full-access`는 네트워크 접근과
   무제한 실행을 준다.
 - claude `plan`은 어느 프리셋에도 쓰지 않는다. 문서 산출까지 막는다.
