@@ -797,6 +797,8 @@ def validate_provider_model_and_thinking(
     mode_catalog: dict[str, ProviderModeCatalog] | None,
     use_known_mode_fallback: bool,
     problems: Problems,
+    existing_profiles: list[Any] | None,
+    update: bool,
 ) -> None:
     provider_ready: dict[str, bool] = {}
     providers_needing_models: set[str] = set()
@@ -817,7 +819,16 @@ def validate_provider_model_and_thinking(
             status = normal_string(provider_info.get("status"))
             available = status is not None and status.casefold() == "available"
             if not available:
-                problems.error(
+                specified = candidate.profile if isinstance(candidate.profile, Mapping) else {}
+                emit = (
+                    problems.error
+                    if any(
+                        key in specified
+                        for key in ("modeId", "thinkingOptionId", "featureValues")
+                    )
+                    else problems.warning
+                )
+                emit(
                     "PROVIDER_STATUS",
                     f"provider {candidate.provider!r}의 status가 available이 아닙니다: {status!r}.",
                     f"{profile_path}.provider",
@@ -885,7 +896,30 @@ def validate_provider_model_and_thinking(
         if candidate.model is None:
             continue
         if candidate.provider is None or not provider_ready.get(candidate.provider, False):
-            problems.error(
+            specified = candidate.profile if isinstance(candidate.profile, Mapping) else {}
+            unchanged_registered = False
+            if update and existing_profiles is not None and candidate.identifier is not None:
+                matches = [
+                    item
+                    for item in existing_profiles
+                    if isinstance(item, dict)
+                    and normal_string(item.get("id")) == candidate.identifier
+                ]
+                if len(matches) == 1:
+                    existing = matches[0]
+                    unchanged_registered = (
+                        normal_string(existing.get("provider")) == candidate.provider
+                        and normal_string(existing.get("model")) == candidate.model
+                    )
+            omit_optional = not any(
+                key in specified for key in ("modeId", "thinkingOptionId", "featureValues")
+            )
+            emit = (
+                problems.warning
+                if unchanged_registered and omit_optional
+                else problems.error
+            )
+            emit(
                 "MODEL_PROVIDER",
                 "provider가 available 상태가 아니어서 model을 검증할 수 없습니다.",
                 f"{profile_path}.model",
@@ -2068,6 +2102,8 @@ def execute_profiles(
             mode_catalog,
             args.modes_file is None,
             problems,
+            existing_profiles,
+            args.update,
         )
     if not args.replace_all:
         # Run even when other fields already failed: one run reports every
