@@ -89,24 +89,32 @@ def cmd_routing(args) -> int:
     fields = [
         diff("provider", profile.get("provider"), snap.get("provider")),
         diff("model", profile.get("model"), snap.get("model")),
-        # 모드는 런타임이 스스로 보고하는 값(runtimeInfo)을 우선한다.
-        diff("modeId", profile.get("modeId"),
-             (snap.get("runtimeInfo") or {}).get("modeId") or snap.get("currentModeId")),
-        diff("thinkingOptionId", profile.get("thinkingOptionId"), snap.get("thinkingOptionId")),
     ]
 
-    # 요청은 반영됐는데 실효값이 다른 경우는 따로 잡아야 원인이 보인다.
-    effective = snap.get("effectiveThinkingOptionId")
-    if effective is not None and effective != snap.get("thinkingOptionId"):
-        fields.append(diff("effectiveThinkingOptionId", snap.get("thinkingOptionId"), effective))
-
-    # 프로필이 선언한 feature만 판정한다. 선언하지 않은 것은 provider 기본값이므로
+    # 프로필이 선언한 키만 판정한다. 선언하지 않은 것은 provider 기본값이므로
     # 불일치가 아니라 참고 정보로 남긴다.
+    undeclared_settings = {}
+    actual_mode = (snap.get("runtimeInfo") or {}).get("modeId") or snap.get("currentModeId")
+    if "modeId" in profile:
+        fields.append(diff("modeId", profile.get("modeId"), actual_mode))
+    else:
+        undeclared_settings["modeId"] = actual_mode
+
+    actual_thinking = snap.get("thinkingOptionId")
+    if "thinkingOptionId" in profile:
+        fields.append(diff("thinkingOptionId", profile.get("thinkingOptionId"), actual_thinking))
+        # 요청은 반영됐는데 실효값이 다른 경우는 따로 잡아야 원인이 보인다.
+        effective = snap.get("effectiveThinkingOptionId")
+        if effective is not None and effective != actual_thinking:
+            fields.append(diff("effectiveThinkingOptionId", actual_thinking, effective))
+    else:
+        undeclared_settings["thinkingOptionId"] = actual_thinking
+
     wanted = normalize_features(profile.get("featureValues"))
     actual = normalize_features(snap.get("features"))
     for key, value in wanted.items():
         fields.append(diff(f"features.{key}", value, actual.get(key)))
-    undeclared = {k: v for k, v in actual.items() if k not in wanted}
+    undeclared_features = {k: v for k, v in actual.items() if k not in wanted}
 
     bad = [f for f in fields if not f["match"]]
     result = {
@@ -115,7 +123,8 @@ def cmd_routing(args) -> int:
         "passed": not bad,
         "reason": "" if not bad else "프로필 값과 실제 런타임 값이 다르다.",
         "fields": fields,
-        "undeclaredFeatures": undeclared,
+        "undeclaredFeatures": undeclared_features,
+        "undeclaredSettings": undeclared_settings,
     }
     return emit("routing", [result], args.json)
 

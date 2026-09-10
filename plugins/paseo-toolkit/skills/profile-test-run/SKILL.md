@@ -151,13 +151,17 @@ python scripts/testrun_ledger.py next --state state.json     # 지금 띄울 프
 **MCP `create_agent`로 띄운다. CLI가 아니다.** 프로필의 `featureValues`는 CLI
 `paseo run`·`paseo agent update`에 해당 플래그가 없어서 CLI로는 전달도 검증도 되지
 않는다. 프로필 값은 이름이 바뀌어 들어가므로 그대로 옮겨 담는다.
+**프로필에 있는 키만 `create_agent`의 `settings`로 옮기고, 없는 키는 넣지 않는다.**
+없는 `modeId`를 만들어 넣으면 전용 어댑터가 없는 provider에서 기동이 실패한다.
+grok이 그 경우다 — `modes`가 빈 배열이라
+`Invalid mode 'default' for provider 'grok'. Available modes: (none)`.
 
 | 프로필 필드 | `create_agent` 인자 |
 | --- | --- |
 | `provider` + `model` | `provider`에 `"provider/model"`로 합침 |
-| `modeId` | `settings.modeId` |
-| `thinkingOptionId` | `settings.thinkingOptionId` |
-| `featureValues` | `settings.features` |
+| `modeId` | `settings.modeId` (프로필에 키가 있을 때만) |
+| `thinkingOptionId` | `settings.thinkingOptionId` (프로필에 키가 있을 때만) |
+| `featureValues` | `settings.features` (프로필에 키가 있을 때만) |
 
 `title`은 `테스트: {프로필 id}`로, `labels`는 `{"profile": <id>, "task": "profile-test-run"}`로
 남긴다. 나중에 목록에서 테스트용 에이전트를 골라내는 근거가 된다.
@@ -178,17 +182,18 @@ python scripts/check_routing.py routing --daemon daemon.json --status status.jso
   --profile-id explore --json > routing_explore.json
 ```
 
-스크립트가 대조하는 것은 `provider`, `model`, `modeId`, `thinkingOptionId`,
-그리고 프로필이 선언한 `features`다. 모드는 런타임이 스스로 보고하는
-`runtimeInfo.modeId`를 우선해서 본다. `thinkingOptionId`와 `effectiveThinkingOptionId`가
-다르면 그것도 따로 잡는다 — 요청은 반영됐는데 실효값이 다른 경우라 원인이 다르다.
+스크립트가 대조하는 것은 `provider`, `model`, 그리고 프로필이 선언한
+`modeId`·`thinkingOptionId`·`features`다. 모드는 런타임이 스스로 보고하는
+`runtimeInfo.modeId`를 우선해서 본다. 프로필이 `thinkingOptionId`를 선언했고
+요청값과 `effectiveThinkingOptionId`가 다르면 그것도 따로 잡는다 — 요청은
+반영됐는데 실효값이 다른 경우라 원인이 다르다.
 
 여기서 실제 불일치가 잡힌다. **요청값과 실제값이 다르면 항상 FAIL로 기록한다.** 알려진
 현상이라는 이유로 PASS로 넘기지 마라. 그대로 불일치로 보고해야 사용자가 프로필을 고칠지
 Paseo 쪽 문제로 볼지 판단할 수 있다.
 
-프로필이 `featureValues`를 선언하지 않았으면 그 항목은 판정하지 않고 참고로만 남긴다.
-선언하지 않은 값은 provider 기본값이라 불일치가 아니다.
+프로필이 `modeId`·`thinkingOptionId`·`featureValues`를 선언하지 않았으면 그 항목은
+판정하지 않고 참고로만 남긴다. 선언하지 않은 값은 provider 기본값이라 불일치가 아니다.
 
 종료 코드는 0이 일치, 1이 불일치, 2가 입력·실행 오류다. 2가 나오면 판정이 아니라
 스크립트가 못 돈 것이니 결과를 PASS로 기록하지 마라.
