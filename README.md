@@ -38,7 +38,7 @@ flowchart LR
 
 | 플러그인 | 대상 | 버전 | 설명 |
 |---|---|---|---|
-| [`paseo-toolkit`](plugins/paseo-toolkit/.claude-plugin/plugin.json) | Claude Code, Codex CLI | 0.5.4 | Paseo 에이전트·데몬 운영: 단계별 워크플로 오케스트레이션, 에이전트 프로필 구성, 결과 보고 |
+| [`paseo-toolkit`](plugins/paseo-toolkit/.claude-plugin/plugin.json) | Claude Code, Codex CLI | 0.5.5 | Paseo 에이전트·데몬 운영: 단계별 워크플로 오케스트레이션, 에이전트 프로필 구성, 결과 보고 |
 | [`codex-skill-creator`](plugins/codex-skill-creator/.codex-plugin/plugin.json) | Codex CLI 전용 | 1.0.0 | 스킬 생성·개선·성능 측정. Claude Code에는 동일 기능의 공식 `skill-creator` 플러그인이 이미 있어 등록하지 않음 |
 
 ## `paseo-toolkit` 스킬
