@@ -1,6 +1,6 @@
 import type { PluginClientContext } from "@getpaseo/plugin/client";
 import { stopAll } from "./client/cleanup";
-import { ProbePanel } from "./client/panel";
+import { OrchestrationGraphPanel } from "./client/panel";
 
 export default function contribute(client: PluginClientContext) {
   client.addWorkspacePanel({
@@ -9,7 +9,7 @@ export default function contribute(client: PluginClientContext) {
     icon: "PanelsTopLeft",
     context: "workspace",
     locations: ["workspace", "explorer"],
-    Component: ProbePanel,
+    Component: OrchestrationGraphPanel,
   });
   return () => {
     stopAll();

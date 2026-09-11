@@ -13,11 +13,5 @@
     "react-native": "0.81.5",
     "typescript": "^5.9.3",
     "zod": "^4.4.3"
-  },
-  "dependencies": {
-    "@types/d3-force": "^3.0.10",
-    "@types/dagre": "^0.7.54",
-    "d3-force": "^3.0.0",
-    "dagre": "^0.8.5"
   }
 }

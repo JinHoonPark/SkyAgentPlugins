@@ -2,12 +2,18 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { RpcInput, RpcOutput } from "@getpaseo/plugin";
 import type { PluginHandlerContext } from "@getpaseo/plugin/server";
-import { getGraphRpc, listGraphsRpc } from "../shared/graphs";
+import {
+  displayName,
+  foldGraphStatus,
+  getGraphRpc,
+  listGraphsRpc,
+  readGraphFileRpc,
+  resolveRoot,
+  synthesizeStatus,
+  type GraphAgentSnapshot,
+} from "../shared/graphs";
 
 const REQUIRED_COLUMNS = ["노드 ID", "프로필", "상태", "agentId"] as const;
-const PARENT_AGENT_ID_LABEL = "paseo.parent-agent-id";
-
-type DisplayStatus = RpcOutput<typeof getGraphRpc>["nodes"][number]["status"];
 
 export type ParsedGraphRow = {
   id: string;
@@ -20,17 +26,37 @@ export type ParseGraphTableResult =
   | { ok: true; rows: ParsedGraphRow[] }
   | { ok: false; missingColumns: string[] };
 
-type ListedAgent = {
-  id: string;
-  title: string | null;
-  status: "initializing" | "idle" | "running" | "error" | "closed";
-  labels: Readonly<Record<string, string>>;
+export type ParsedMermaid = {
+  edges: Array<{ from: string; to: string }>;
+  labels: Record<string, string[]>;
+  nodeIds: string[];
 };
 
-export function listGraphs({ directory }: RpcInput<typeof listGraphsRpc>) {
+type ListedAgent = GraphAgentSnapshot;
+
+export async function listGraphs(
+  { directory }: RpcInput<typeof listGraphsRpc>,
+  context: PluginHandlerContext,
+) {
+  const names = listGraphNames(directory);
+  const listed = await context.paseo.agents.list();
+  const agents = new Map<string, ListedAgent>();
+  for (const entry of listed.entries) {
+    agents.set(entry.agent.id, entry.agent);
+  }
+  const items: RpcOutput<typeof listGraphsRpc>["items"] = [];
+  for (const name of names) {
+    const loaded = loadParsedGraph(directory, name);
+    const view = assembleGraph(loaded.name, loaded.rows, loaded.mermaid, listed);
+    items.push({ name, status: foldGraphStatus(view.nodes, agents) });
+  }
+  return { items };
+}
+
+function listGraphNames(directory: string) {
   const orchestrationDir = join(resolve(directory), ".skywork", "paseo-orchestration");
   if (!existsSync(orchestrationDir)) {
-    return { names: [] };
+    return [];
   }
 
   const names: string[] = [];
@@ -42,7 +68,7 @@ export function listGraphs({ directory }: RpcInput<typeof listGraphsRpc>) {
       names.push(entry.name);
     }
   }
-  return { names };
+  return names;
 }
 
 export function isGraphName(name: string) {
@@ -108,9 +134,52 @@ export function parseGraphTable(markdown: string): ParseGraphTableResult {
   return { ok: true, rows };
 }
 
+export function parseMermaid(markdown: string): ParsedMermaid {
+  const body = extractMermaidBody(markdown);
+  if (body == null) {
+    return { edges: [], labels: {}, nodeIds: [] };
+  }
+
+  const labels: Record<string, string[]> = {};
+  const nodeIds: string[] = [];
+  const seenNodes = new Set<string>();
+  const edges: Array<{ from: string; to: string }> = [];
+  const seenEdges = new Set<string>();
+
+  const addNode = (id: string) => {
+    if (!seenNodes.has(id)) {
+      seenNodes.add(id);
+      nodeIds.push(id);
+    }
+  };
+
+  for (const line of body.split(/\r?\n/)) {
+    const labelRe = /([A-Za-z][A-Za-z0-9_]*)\["((?:[^"\\]|\\.)*)"\]/g;
+    for (const match of line.matchAll(labelRe)) {
+      addNode(match[1]);
+      if (labels[match[1]] == null) {
+        labels[match[1]] = match[2].split("<br/>");
+      }
+    }
+    const edgeRe = /([A-Za-z][A-Za-z0-9_]*)(?:\["(?:[^"\\]|\\.)*"\])?\s*-->\s*([A-Za-z][A-Za-z0-9_]*)/g;
+    for (const match of line.matchAll(edgeRe)) {
+      addNode(match[1]);
+      addNode(match[2]);
+      const key = match[1] + "\0" + match[2];
+      if (!seenEdges.has(key)) {
+        seenEdges.add(key);
+        edges.push({ from: match[1], to: match[2] });
+      }
+    }
+  }
+
+  return { edges, labels, nodeIds };
+}
+
 export function assembleGraph(
   name: string,
   rows: ParsedGraphRow[],
+  mermaid: ParsedMermaid,
   listed: { entries: Array<{ agent: ListedAgent }> },
 ): RpcOutput<typeof getGraphRpc> {
   const agents = new Map<string, ListedAgent>();
@@ -119,30 +188,70 @@ export function assembleGraph(
   }
 
   const waiting = rows.every((row) => row.agentId == null);
-  const nodes = rows.map((row) => {
+  const seen = new Set<string>();
+  const nodes: RpcOutput<typeof getGraphRpc>["nodes"] = [];
+
+  for (const row of rows) {
     const snapshot = row.agentId == null ? undefined : agents.get(row.agentId);
-    return {
+    const mermaidLines = mermaid.labels[row.id];
+    nodes.push({
       id: row.id,
       profile: row.profile,
       tableStatus: row.tableStatus,
       agentId: row.agentId,
       displayName: displayName(row.profile, row.agentId, snapshot),
       status: synthesizeStatus(row.agentId, row.tableStatus, snapshot),
-    };
-  });
+      fromTable: true,
+      labelLines: mermaidLines && mermaidLines.length > 0 ? mermaidLines : [row.profile],
+    });
+    seen.add(row.id);
+  }
+
+  for (const id of mermaid.nodeIds) {
+    if (seen.has(id)) {
+      continue;
+    }
+    const mermaidLines = mermaid.labels[id];
+    const labelLines = mermaidLines && mermaidLines.length > 0 ? mermaidLines : [id];
+    nodes.push({
+      id,
+      profile: "",
+      tableStatus: "",
+      agentId: null,
+      displayName: labelLines[0] ?? id,
+      status: null,
+      fromTable: false,
+      labelLines,
+    });
+    seen.add(id);
+  }
+
+  const tableStatuses = nodes.flatMap((node) => (node.fromTable && node.status != null ? [node.status] : []));
 
   return {
     name,
     waiting,
-    root: waiting ? null : resolveRoot(rows, agents, nodes.map((node) => node.status)),
+    root: waiting ? null : resolveRoot(rows, agents, tableStatuses),
     nodes,
+    edges: mermaid.edges,
   };
+}
+
+export function readGraphFile({ directory, name }: RpcInput<typeof readGraphFileRpc>) {
+  const loaded = loadParsedGraph(directory, name);
+  return assembleGraph(loaded.name, loaded.rows, loaded.mermaid, { entries: [] });
 }
 
 export async function getGraph(
   { directory, name }: RpcInput<typeof getGraphRpc>,
   context: PluginHandlerContext,
 ) {
+  const loaded = loadParsedGraph(directory, name);
+  const listed = await context.paseo.agents.list();
+  return assembleGraph(loaded.name, loaded.rows, loaded.mermaid, listed);
+}
+
+function loadParsedGraph(directory: string, name: string) {
   if (!isGraphName(name)) {
     throw new Error("invalid graph name: " + name);
   }
@@ -152,13 +261,29 @@ export async function getGraph(
     throw new Error(name + ": GRAPH.md not found");
   }
 
-  const parsed = parseGraphTable(readFileSync(graphFile, "utf8"));
+  const markdown = readFileSync(graphFile, "utf8");
+  const parsed = parseGraphTable(markdown);
   if (!parsed.ok) {
     throw new Error(name + ": missing columns " + parsed.missingColumns.join(", "));
   }
 
-  const listed = await context.paseo.agents.list();
-  return assembleGraph(name, parsed.rows, listed);
+  return { name, rows: parsed.rows, mermaid: parseMermaid(markdown) };
+}
+
+function extractMermaidBody(markdown: string) {
+  const start = markdown.search(/```mermaid\b/);
+  if (start < 0) {
+    return null;
+  }
+  const afterOpen = markdown.indexOf("\n", start);
+  if (afterOpen < 0) {
+    return null;
+  }
+  const close = markdown.indexOf("```", afterOpen + 1);
+  if (close < 0) {
+    return null;
+  }
+  return markdown.slice(afterOpen + 1, close);
 }
 
 function splitCells(line: string) {
@@ -169,97 +294,4 @@ function splitCells(line: string) {
   const parts = trimmed.split("|");
   const end = parts[parts.length - 1] === "" ? parts.length - 1 : parts.length;
   return parts.slice(1, end).map((cell) => cell.trim());
-}
-
-function displayName(profile: string, agentId: string | null, snapshot: ListedAgent | undefined) {
-  if (agentId == null) {
-    return profile;
-  }
-  const title = snapshot?.title?.trim();
-  if (title) {
-    return title;
-  }
-  const fromLabel = snapshot?.labels.profile?.trim();
-  if (fromLabel) {
-    return fromLabel;
-  }
-  return profile;
-}
-
-function synthesizeStatus(
-  agentId: string | null,
-  tableStatus: string,
-  snapshot: ListedAgent | undefined,
-): DisplayStatus {
-  if (agentId == null) {
-    return "대기";
-  }
-  if (snapshot == null) {
-    return asDisplayStatus(tableStatus);
-  }
-  if (snapshot.status === "error") {
-    return "실패";
-  }
-  if (snapshot.status === "running" || snapshot.status === "initializing") {
-    return "실행 중";
-  }
-  if (snapshot.status === "idle" || snapshot.status === "closed") {
-    if (tableStatus === "완료" || tableStatus === "실패") {
-      return tableStatus;
-    }
-    return "실행 중";
-  }
-  return asDisplayStatus(tableStatus);
-}
-
-function asDisplayStatus(tableStatus: string): DisplayStatus {
-  if (tableStatus === "대기" || tableStatus === "실행 중" || tableStatus === "완료" || tableStatus === "실패") {
-    return tableStatus;
-  }
-  return "대기";
-}
-
-function foldNodeStatuses(statuses: DisplayStatus[]): DisplayStatus {
-  if (statuses.some((status) => status === "실패")) {
-    return "실패";
-  }
-  if (statuses.every((status) => status === "완료")) {
-    return "완료";
-  }
-  if (statuses.every((status) => status === "대기")) {
-    return "대기";
-  }
-  return "실행 중";
-}
-
-function resolveRoot(
-  rows: ParsedGraphRow[],
-  agents: Map<string, ListedAgent>,
-  nodeStatuses: DisplayStatus[],
-) {
-  const parentIds = new Set<string>();
-  for (const row of rows) {
-    if (row.agentId == null) {
-      continue;
-    }
-    const snapshot = agents.get(row.agentId);
-    const parentId = snapshot?.labels[PARENT_AGENT_ID_LABEL]?.trim();
-    if (parentId) {
-      parentIds.add(parentId);
-    }
-  }
-  if (parentIds.size !== 1) {
-    return null;
-  }
-  const parentId = [...parentIds][0];
-  const lead = agents.get(parentId);
-  if (lead == null) {
-    return null;
-  }
-  const tableStatus = foldNodeStatuses(nodeStatuses);
-  return {
-    id: lead.id,
-    name: displayName(lead.id, lead.id, lead),
-    status: synthesizeStatus(lead.id, tableStatus, lead),
-  };
 }
