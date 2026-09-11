@@ -141,6 +141,17 @@ mode가 하나뿐인 경우(위 「권한 등급 대응」의 "mode가 하나뿐
 `../../scripts/manage_profiles.py`는 모델의 `thinkingOptionIds`에 없는 값을 **경고가 아니라
 오류(`THINKING`)로 막는다.** 오류가 하나라도 있으면 `--apply`가 프로필 전체를 쓰지 않는다.
 
+빈 배열(`[]`)은 목록이 있는 것이 아니라 **선언이 없는 것**으로 다룬다. 이때 판정은 provider에
+따라 갈린다.
+
+- **claude**: 오류. Haiku 4.5와 `opus[1m]`이 여기 해당하며, 어떤 값을 넣어도 막힌다. `off`처럼
+  지원되지 않는 값은 Paseo 실행 중에 실제로 실패한다.
+- **그 외 provider**: 경고(`THINKING_UNVERIFIED`)로 통과한다. provider가 thinking 옵션을 선언하지
+  않았을 뿐이고, Paseo는 에이전트를 만들 때 이 값을 목록과 대조하지 않고 그대로 실행한다.
+  예를 들어 `fireworks-deepseek`는 빈 배열을 주면서도 `xhigh`를 받아 실행한다.
+
+`model`이 없어 대조할 수 없을 때도 같은 경고다.
+
 같은 이유로 아래도 전부 오류다.
 
 - Opus 4.6 / Sonnet 4.6에 `xhigh`

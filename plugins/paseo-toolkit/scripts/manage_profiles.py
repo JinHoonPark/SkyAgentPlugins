@@ -964,7 +964,29 @@ def validate_provider_model_and_thinking(
 
         if candidate.thinking_option_id is not None:
             options = model_info.get("thinkingOptionIds")
-            if not isinstance(options, list) or candidate.thinking_option_id not in options:
+            if not isinstance(options, list) or not options:
+                # The model declares no thinking options (missing key or empty
+                # list), so there is no list to check against.  For most
+                # providers that is unverifiable, not wrong: Paseo accepts and
+                # runs the value (its create path does not apply the same
+                # comparison).  Claude is the exception, where an unsupported
+                # value such as "off" fails at run time, so it stays an error.
+                if candidate.provider == "claude":
+                    problems.error(
+                        "THINKING",
+                        f"model {candidate.model!r}은 thinkingOptionIds를 선언하지 않는데 "
+                        f"claude에서 이 값은 실행에 실패할 수 있습니다: "
+                        f"{candidate.thinking_option_id!r}.",
+                        f"{profile_path}.thinkingOptionId",
+                    )
+                else:
+                    problems.warning(
+                        "THINKING_UNVERIFIED",
+                        f"model {candidate.model!r}이 thinkingOptionIds를 선언하지 않아 "
+                        f"thinkingOptionId {candidate.thinking_option_id!r}를 대조할 수 없습니다.",
+                        f"{profile_path}.thinkingOptionId",
+                    )
+            elif candidate.thinking_option_id not in options:
                 problems.error(
                     "THINKING",
                     f"thinkingOptionId {candidate.thinking_option_id!r}는 model "
