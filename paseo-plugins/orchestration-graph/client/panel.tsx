@@ -1,18 +1,15 @@
-import type { PluginWorkspacePanelProps } from "@getpaseo/plugin/client";
+import type { PluginAgentPanelProps } from "@getpaseo/plugin/client";
 import { useAgent, usePaseo, useRpc, useWorkspace } from "@getpaseo/plugin/client";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { PanResponder, Pressable, ScrollView, Text, View } from "react-native";
+import { PanResponder, ScrollView, Text, View } from "react-native";
 import {
-  GRAPH_STATUS_COLOR,
-  GRAPH_STATUS_COLOR_LIGHT,
   GRAPH_WAITING_LABEL,
-  isLightSurface,
   PARENT_AGENT_ID_LABEL,
+  findGraphByAgentRpc,
   getGraphRpc,
   graphFileEquals,
   layoutSignature,
-  listGraphsRpc,
   readGraphFileRpc,
   type GraphAgentSnapshot,
   type GraphView,
@@ -21,6 +18,7 @@ import { registerStop } from "./cleanup";
 import { GraphCanvas } from "./graph-canvas";
 import { applyLiveGraph, toAgentSnapshot } from "./live-graph";
 import {
+  BADGE_HEIGHT,
   LINE_HEIGHT,
   type EdgePath,
   type EdgeSegment,
@@ -30,7 +28,7 @@ import {
 
 const ROOT_WIDTH = 400;
 const NODE_PAD_Y = 10;
-const ROOT_HEIGHT = NODE_PAD_Y * 2 + LINE_HEIGHT * 2 + 12;
+const ROOT_HEIGHT = BADGE_HEIGHT + NODE_PAD_Y * 2 + LINE_HEIGHT * 2 + 12;
 const NODE_WIDTH = 260;
 const PAD = 16;
 const FILE_POLL_MS = 2000;
@@ -38,10 +36,7 @@ const LANE_PITCH = 18;
 const LANE_INSET = 14;
 const SKIP_STUB = 8;
 const SKIP_STAGGER = 6;
-
-function center(node: NodeBox) {
-  return { x: node.left + node.width / 2, y: node.top + node.height / 2 };
-}
+const EDGE_STAGGER = 6;
 
 function segmentMetrics(ax: number, ay: number, bx: number, by: number): EdgeSegment | null {
   const dx = bx - ax;
@@ -55,7 +50,7 @@ function segmentMetrics(ax: number, ay: number, bx: number, by: number): EdgeSeg
     left: ax,
     top: ay - 1,
     width: Math.round(length),
-    deg: Math.round((Math.atan2(dy, dx) * 180) / Math.PI),
+    deg: Math.abs(dx) >= Math.abs(dy) ? (dx >= 0 ? 0 : 180) : dy >= 0 ? 90 : -90,
   };
 }
 
@@ -72,7 +67,34 @@ function segmentsFromPoints(keyBase: string, points: Array<{ x: number; y: numbe
 }
 
 function nodeHeight(lineCount: number) {
-  return NODE_PAD_Y * 2 + Math.max(1, lineCount) * LINE_HEIGHT;
+  return BADGE_HEIGHT + NODE_PAD_Y * 2 + Math.max(1, lineCount) * LINE_HEIGHT;
+}
+
+function bottomCenter(node: NodeBox) {
+  return { x: node.left + node.width / 2, y: node.top + node.height };
+}
+
+function topCenter(node: NodeBox) {
+  return { x: node.left + node.width / 2, y: node.top };
+}
+
+function staggerOffset(index: number, count: number) {
+  return (index - (count - 1) / 2) * EDGE_STAGGER;
+}
+
+function orthoPoints(from: NodeBox, to: NodeBox, midOffset: number): Array<{ x: number; y: number }> {
+  const start = bottomCenter(from);
+  const end = topCenter(to);
+  const midY = start.y + (end.y - start.y) / 2 + midOffset;
+  const points = [
+    { x: start.x, y: start.y },
+    { x: start.x, y: midY },
+  ];
+  if (Math.abs(end.x - start.x) >= 1) {
+    points.push({ x: end.x, y: midY });
+  }
+  points.push({ x: end.x, y: end.y });
+  return points;
 }
 
 function layoutGraph(
@@ -197,59 +219,68 @@ function layoutGraph(
   }
   const rootBox = root == null ? null : (boxes.get(root.id) ?? null);
   const paths: EdgePath[] = [];
-  if (rootBox != null && root != null) {
-    const a = center(rootBox);
-    for (const id of entryIds) {
-      const to = boxes.get(id);
-      if (to == null) {
-        continue;
-      }
-      const b = center(to);
-      const follow = segmentMetrics(a.x, a.y, b.x, b.y);
-      if (follow != null) {
-        const segment = { ...follow, key: `root-${id}` };
-        paths.push({ key: `root-${id}`, from: root.id, to: id, segments: [segment] });
-      }
-    }
-  }
+  const skipKeys = new Set(skipEdges.map((edge) => `${edge.from}-${edge.to}`));
   skipEdges.forEach((edge, index) => {
     const from = boxes.get(edge.from);
     const to = boxes.get(edge.to);
     if (from == null || to == null) {
       return;
     }
-    const a = center(from);
-    const b = center(to);
+    const start = bottomCenter(from);
+    const end = topCenter(to);
     const laneX = LANE_INSET + LANE_PITCH * index + LANE_PITCH / 2;
     const y1 = from.top + from.height + SKIP_STUB + index * SKIP_STAGGER;
     const y2 = to.top - SKIP_STUB - index * SKIP_STAGGER;
     const segments = segmentsFromPoints(`${edge.from}-${edge.to}`, [
-      { x: a.x, y: a.y },
-      { x: a.x, y: y1 },
+      { x: start.x, y: start.y },
+      { x: start.x, y: y1 },
       { x: laneX, y: y1 },
       { x: laneX, y: y2 },
-      { x: b.x, y: y2 },
-      { x: b.x, y: b.y },
+      { x: end.x, y: y2 },
+      { x: end.x, y: end.y },
     ]);
     paths.push({ key: `${edge.from}-${edge.to}`, from: edge.from, to: edge.to, segments });
   });
-  const skipKeys = new Set(skipEdges.map((edge) => `${edge.from}-${edge.to}`));
+  const grouped = new Map<string, Array<{ from: string; to: string; key: string }>>();
+  const addOrtho = (from: string, to: string, key: string) => {
+    const list = grouped.get(from) ?? [];
+    list.push({ from, to, key });
+    grouped.set(from, list);
+  };
+  if (root != null) {
+    for (const id of entryIds) {
+      addOrtho(root.id, id, `root-${id}`);
+    }
+  }
   for (const edge of edges) {
     if (skipKeys.has(`${edge.from}-${edge.to}`)) {
       continue;
     }
-    const from = boxes.get(edge.from);
-    const to = boxes.get(edge.to);
-    if (from == null || to == null) {
-      continue;
+    addOrtho(edge.from, edge.to, `${edge.from}-${edge.to}`);
+  }
+  const incomingCount = new Map<string, number>();
+  const incomingSeen = new Map<string, number>();
+  for (const list of grouped.values()) {
+    for (const edge of list) {
+      incomingCount.set(edge.to, (incomingCount.get(edge.to) ?? 0) + 1);
     }
-    const a = center(from);
-    const b = center(to);
-    const follow = segmentMetrics(a.x, a.y, b.x, b.y);
-    if (follow != null) {
-      const segment = { ...follow, key: `${edge.from}-${edge.to}` };
-      paths.push({ key: `${edge.from}-${edge.to}`, from: edge.from, to: edge.to, segments: [segment] });
-    }
+  }
+  for (const list of grouped.values()) {
+    list.forEach((edge, index) => {
+      const from = boxes.get(edge.from);
+      const to = boxes.get(edge.to);
+      if (from == null || to == null) {
+        return;
+      }
+      const inIndex = incomingSeen.get(edge.to) ?? 0;
+      incomingSeen.set(edge.to, inIndex + 1);
+      const midOffset =
+        staggerOffset(index, list.length) + staggerOffset(inIndex, incomingCount.get(edge.to) ?? 1);
+      const segments = segmentsFromPoints(edge.key, orthoPoints(from, to, midOffset));
+      if (segments.length > 0) {
+        paths.push({ key: edge.key, from: edge.from, to: edge.to, segments });
+      }
+    });
   }
   const segments = paths.flatMap((path) => path.segments);
   const placed: PlacedGraph = {
@@ -285,10 +316,9 @@ function AgentSnapshotTap({
   return null;
 }
 
-export function OrchestrationGraphPanel({ theme, layout, workspaceId }: PluginWorkspacePanelProps) {
+export function OrchestrationGraphPanel({ theme, layout, workspaceId, agentId }: PluginAgentPanelProps) {
   const directory = useWorkspace(workspaceId, (workspace) => workspace.directory);
   const paseo = usePaseo();
-  const [selectedName, setSelectedName] = useState<string | null>(null);
   const [snapshots, setSnapshots] = useState<Map<string, GraphAgentSnapshot>>(() => new Map());
   const [fileView, setFileView] = useState<GraphView | null>(null);
   const vScroll = useRef<ScrollView>(null);
@@ -315,7 +345,7 @@ export function OrchestrationGraphPanel({ theme, layout, workspaceId }: PluginWo
       }),
     [],
   );
-  const listGraphs = useRpc(listGraphsRpc);
+  const findGraphByAgent = useRpc(findGraphByAgentRpc);
   const getGraph = useRpc(getGraphRpc);
   const readGraphFile = useRpc(readGraphFileRpc);
   const putSnapshot = useCallback((snapshot: GraphAgentSnapshot) => {
@@ -335,18 +365,19 @@ export function OrchestrationGraphPanel({ theme, layout, workspaceId }: PluginWo
       return next;
     });
   }, []);
-  const graphs = useQuery({
-    queryKey: [listGraphsRpc.name, directory],
-    queryFn: () => listGraphs({ directory: directory! }),
-    enabled: directory != null && selectedName == null,
+  const found = useQuery({
+    queryKey: [findGraphByAgentRpc.name, directory, agentId],
+    queryFn: () => findGraphByAgent({ directory: directory!, agentId }),
+    enabled: directory != null,
   });
+  const graphName = found.data?.name ?? null;
   const graph = useQuery({
-    queryKey: [getGraphRpc.name, directory, selectedName],
-    queryFn: () => getGraph({ directory: directory!, name: selectedName! }),
-    enabled: directory != null && selectedName != null,
+    queryKey: [getGraphRpc.name, directory, graphName],
+    queryFn: () => getGraph({ directory: directory!, name: graphName! }),
+    enabled: directory != null && graphName != null,
   });
   useEffect(() => {
-    if (selectedName == null) {
+    if (graphName == null) {
       setSnapshots(new Map());
       return;
     }
@@ -362,17 +393,17 @@ export function OrchestrationGraphPanel({ theme, layout, workspaceId }: PluginWo
     });
     const unregister = registerStop(stop);
     return unregister;
-  }, [paseo, putSnapshot, selectedName, workspaceId]);
+  }, [paseo, putSnapshot, graphName, workspaceId]);
   useEffect(() => {
     setFileView(null);
     offsetX.current = 0;
     offsetY.current = 0;
-    if (selectedName == null || directory == null) {
+    if (graphName == null || directory == null) {
       return;
     }
     let cancelled = false;
     let seq = 0;
-    const requestedName = selectedName;
+    const requestedName = graphName;
     const timer = setInterval(() => {
       const thisSeq = ++seq;
       void readGraphFile({ directory, name: requestedName }).then(
@@ -390,7 +421,7 @@ export function OrchestrationGraphPanel({ theme, layout, workspaceId }: PluginWo
       seq = -1;
       clearInterval(timer);
     });
-  }, [directory, readGraphFile, selectedName]);
+  }, [directory, readGraphFile, graphName]);
   const source = useMemo(() => {
     const file = fileView ?? graph.data;
     if (file == null) {
@@ -448,10 +479,6 @@ export function OrchestrationGraphPanel({ theme, layout, workspaceId }: PluginWo
       },
       title: { color: theme.colors.foreground, fontSize: layout.compact ? 18 : 22 },
       label: { color: theme.colors.foregroundMuted },
-      name: { color: theme.colors.foreground },
-      item: { paddingVertical: 8 },
-      back: { paddingVertical: 8, paddingHorizontal: 4, alignSelf: "flex-start" as const },
-      backText: { color: theme.colors.accent },
       canvasWrap: {
         backgroundColor: theme.colors.surface1,
         borderColor: theme.colors.border,
@@ -462,53 +489,31 @@ export function OrchestrationGraphPanel({ theme, layout, workspaceId }: PluginWo
     }),
     [theme, layout.compact],
   );
-  const items = graphs.data?.items ?? [];
-
-  if (selectedName == null) {
+  if (found.isSuccess && found.data.name == null) {
     return (
-      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>실행 목록</Text>
-        {items.map((item) => {
-          const color = (isLightSurface(theme.colors.surface0) ? GRAPH_STATUS_COLOR_LIGHT : GRAPH_STATUS_COLOR)[
-            item.status
-          ];
-          return (
-            <Pressable
-              key={item.name}
-              accessibilityRole="button"
-              accessibilityLabel={`${item.name} ${item.status}`}
-              onPress={() => setSelectedName(item.name)}
-              style={styles.item}
-            >
-              <Text style={[styles.name, { color }]}>{item.name}</Text>
-              <Text style={[styles.name, { color }]}>{item.status}</Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+      <View style={styles.screen}>
+        <View style={styles.content}>
+          <Text style={styles.label}>이 에이전트에 연결된 오케스트레이션 그래프가 없습니다</Text>
+        </View>
+      </View>
     );
   }
 
   return (
     <View style={styles.screen}>
       <View style={styles.content}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="목록으로"
-          onPress={() => setSelectedName(null)}
-          style={styles.back}
-        >
-          <Text style={styles.backText}>목록으로</Text>
-        </Pressable>
-        <Text style={styles.title}>{selectedName}</Text>
-        {tapIds.map((agentId) => (
-          <AgentSnapshotTap key={agentId} agentId={agentId} onSnapshot={putSnapshot} />
+        <Text style={styles.title}>{graphName}</Text>
+        {tapIds.map((id) => (
+          <AgentSnapshotTap key={id} agentId={id} onSnapshot={putSnapshot} />
         ))}
         {view?.waiting ? <Text style={styles.label}>{GRAPH_WAITING_LABEL}</Text> : null}
+        {found.isError ? (
+          <Text style={styles.label}>{found.error instanceof Error ? found.error.message : "그래프를 찾지 못했습니다"}</Text>
+        ) : null}
         {graph.isError ? (
           <Text style={styles.label}>{graph.error instanceof Error ? graph.error.message : "그래프를 읽지 못했습니다"}</Text>
         ) : null}
-        {graph.isPending ? <Text style={styles.label}>불러오는 중</Text> : null}
+        {found.isPending || (graphName != null && graph.isPending) ? <Text style={styles.label}>불러오는 중</Text> : null}
       </View>
       {view != null && placed != null ? (
         <ScrollView
@@ -531,7 +536,7 @@ export function OrchestrationGraphPanel({ theme, layout, workspaceId }: PluginWo
               style={[styles.canvasWrap, { width: placed.canvasWidth, height: placed.canvasHeight }]}
               {...panResponder.panHandlers}
             >
-              <GraphCanvas key={selectedName} view={view} placed={placed} edgeColor={theme.colors.foreground} />
+              <GraphCanvas key={graphName} view={view} placed={placed} colors={theme.colors} />
             </View>
           </ScrollView>
         </ScrollView>

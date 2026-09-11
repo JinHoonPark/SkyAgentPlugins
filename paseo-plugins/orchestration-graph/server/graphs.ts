@@ -1,12 +1,12 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { RpcInput, RpcOutput } from "@getpaseo/plugin";
 import type { PluginHandlerContext } from "@getpaseo/plugin/server";
 import {
   displayName,
-  foldGraphStatus,
+  findGraphByAgentRpc,
   getGraphRpc,
-  listGraphsRpc,
+  PARENT_AGENT_ID_LABEL,
   readGraphFileRpc,
   resolveRoot,
   synthesizeStatus,
@@ -34,8 +34,8 @@ export type ParsedMermaid = {
 
 type ListedAgent = GraphAgentSnapshot;
 
-export async function listGraphs(
-  { directory }: RpcInput<typeof listGraphsRpc>,
+export async function findGraphByAgent(
+  { directory, agentId }: RpcInput<typeof findGraphByAgentRpc>,
   context: PluginHandlerContext,
 ) {
   const names = listGraphNames(directory);
@@ -44,13 +44,29 @@ export async function listGraphs(
   for (const entry of listed.entries) {
     agents.set(entry.agent.id, entry.agent);
   }
-  const items: RpcOutput<typeof listGraphsRpc>["items"] = [];
+  let matchedName: string | null = null;
+  let matchedMtime = Number.NEGATIVE_INFINITY;
   for (const name of names) {
     const loaded = loadParsedGraph(directory, name);
-    const view = assembleGraph(loaded.name, loaded.rows, loaded.mermaid, listed);
-    items.push({ name, status: foldGraphStatus(view.nodes, agents) });
+    const inTable = loaded.rows.some((row) => row.agentId === agentId);
+    const isParent = loaded.rows.some((row) => {
+      if (row.agentId == null) {
+        return false;
+      }
+      const snapshot = agents.get(row.agentId);
+      return snapshot?.labels[PARENT_AGENT_ID_LABEL]?.trim() === agentId;
+    });
+    if (!inTable && !isParent) {
+      continue;
+    }
+    const graphFile = join(resolve(directory), ".skywork", "paseo-orchestration", name, "GRAPH.md");
+    const mtime = statSync(graphFile).mtimeMs;
+    if (mtime > matchedMtime) {
+      matchedMtime = mtime;
+      matchedName = name;
+    }
   }
-  return { items };
+  return { name: matchedName };
 }
 
 function listGraphNames(directory: string) {

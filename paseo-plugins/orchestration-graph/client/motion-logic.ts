@@ -1,3 +1,4 @@
+import type { PluginTheme } from "@getpaseo/plugin";
 import type { GraphNodeStatus } from "../shared/graphs";
 
 export type NodeBox = { id: string; left: number; top: number; width: number; height: number };
@@ -23,32 +24,27 @@ export type PlacedGraph = {
 
 export type NodeStatus = GraphNodeStatus;
 
+export type GraphThemeColors = PluginTheme["colors"];
+
 export const LINE_HEIGHT = 16;
+export const BADGE_HEIGHT = 22;
+export const NODE_RADIUS = 12;
+export const STATUS_BAR_WIDTH = 3;
 
-export const NODE_STATUS_STYLE: Record<
-  NodeStatus,
-  { backgroundColor: string; borderColor: string; borderWidth: number }
-> = {
-  대기: { backgroundColor: "#D4D4D8", borderColor: "#52525B", borderWidth: 1 },
-  "실행 중": { backgroundColor: "#93C5FD", borderColor: "#1D4ED8", borderWidth: 2 },
-  완료: { backgroundColor: "#86EFAC", borderColor: "#166534", borderWidth: 3 },
-  실패: { backgroundColor: "#FCA5A5", borderColor: "#991B1B", borderWidth: 4 },
-};
-
-export const NEUTRAL_NODE_STYLE = {
-  backgroundColor: "#E7E5E4",
-  borderColor: "#57534E",
-  borderWidth: 1,
-  borderStyle: "dashed" as const,
-};
-
-export const NODE_LABEL_COLOR = "#18181B";
+export const NODE_SHADOW = { offsetX: 0, offsetY: 2, blurRadius: 8, color: "#00000026" } as const;
 
 export const STATUS_SCALE: Record<NodeStatus, number> = {
   대기: 1,
   "실행 중": 1.04,
   완료: 1.025,
   실패: 1.03,
+};
+
+export const STATUS_ICON: Record<NodeStatus, string> = {
+  대기: "Clock",
+  "실행 중": "Play",
+  완료: "Check",
+  실패: "X",
 };
 
 export const STATUS_MOTION_MS = 280;
@@ -60,23 +56,43 @@ export const PULSE_MS = 700;
 export const FLOW_PERIOD_MS = 1600;
 export const FLOW_DOT = 8;
 
-export function statusVisual(status: NodeStatus | null | undefined) {
+function statusPaint(status: NodeStatus, colors: GraphThemeColors): string {
+  switch (status) {
+    case "완료":
+      return colors.statusSuccess;
+    case "실행 중":
+      return colors.accent;
+    case "실패":
+      return colors.statusDanger;
+    case "대기":
+      return colors.foregroundMuted;
+  }
+}
+
+export function statusVisual(status: NodeStatus | null | undefined, colors: GraphThemeColors) {
   if (status == null) {
     return {
-      backgroundColor: NEUTRAL_NODE_STYLE.backgroundColor,
-      borderColor: NEUTRAL_NODE_STYLE.borderColor,
-      borderWidth: NEUTRAL_NODE_STYLE.borderWidth,
+      backgroundColor: colors.surface1,
+      borderColor: colors.border,
+      borderWidth: 1,
       scale: 1,
       dashed: true,
+      statusColor: null as string | null,
+      boxShadow: [NODE_SHADOW],
     };
   }
-  const paint = NODE_STATUS_STYLE[status];
+  const paint = statusPaint(status, colors);
+  const running = status === "실행 중";
   return {
-    backgroundColor: paint.backgroundColor,
-    borderColor: paint.borderColor,
-    borderWidth: paint.borderWidth,
+    backgroundColor: colors.surface2,
+    borderColor: running ? colors.accent : colors.border,
+    borderWidth: running ? 2 : 1,
     scale: STATUS_SCALE[status],
     dashed: false,
+    statusColor: paint,
+    boxShadow: running
+      ? [NODE_SHADOW, { offsetX: 0, offsetY: 0, blurRadius: 14, color: colors.accent }]
+      : [NODE_SHADOW],
   };
 }
 

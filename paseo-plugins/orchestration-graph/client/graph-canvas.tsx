@@ -1,8 +1,10 @@
+import { Icon } from "@getpaseo/plugin/client/react-native";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Text, View } from "react-native";
 import type { GraphView } from "../shared/graphs";
 import { registerStop } from "./cleanup";
 import {
+  BADGE_HEIGHT,
   EXIT_FADE_MS,
   FLOW_DOT,
   FLOW_PERIOD_MS,
@@ -10,8 +12,10 @@ import {
   INTRO_STAGGER_MS,
   LAYOUT_MOVE_MS,
   LINE_HEIGHT,
-  NODE_LABEL_COLOR,
+  NODE_RADIUS,
   PULSE_MS,
+  STATUS_BAR_WIDTH,
+  STATUS_ICON,
   STATUS_MOTION_MS,
   incomingPaths,
   introEdgeDelayMs,
@@ -22,6 +26,7 @@ import {
   shouldRunProgressLoop,
   statusVisual,
   type EdgeSegment,
+  type GraphThemeColors,
   type NodeBox,
   type NodeStatus,
   type PlacedGraph,
@@ -77,8 +82,7 @@ type NodeBoxProps = {
   width: number;
   height: number;
   pos: NodePos;
-  pulse: Animated.Value;
-  running: boolean;
+  colors: GraphThemeColors;
 };
 
 function sameLines(left: string[], right: string[]) {
@@ -181,8 +185,8 @@ function stopTracked(stops: Map<string, () => void>, id: string) {
 }
 
 const NodeBoxView = memo(
-  function NodeBoxView({ mode, status, name, labelLines, width, height, pos, pulse, running }: NodeBoxProps) {
-    const initial = statusVisual(status);
+  function NodeBoxView({ mode, status, name, labelLines, width, height, pos, colors }: NodeBoxProps) {
+    const initial = statusVisual(status, colors);
     const scale = useRef(new Animated.Value(initial.scale)).current;
     const colorT = useRef(new Animated.Value(1)).current;
     const fromRef = useRef<Paint>(initial);
@@ -192,10 +196,10 @@ const NodeBoxView = memo(
     useEffect(() => {
       if (skip.current) {
         skip.current = false;
-        fromRef.current = statusVisual(status);
+        fromRef.current = statusVisual(status, colors);
         return;
       }
-      const next = statusVisual(status);
+      const next = statusVisual(status, colors);
       const prevPaint = fromRef.current;
       fromRef.current = next;
       setRange({ from: prevPaint, to: next });
@@ -218,7 +222,7 @@ const NodeBoxView = memo(
         unregColor();
         unregSize();
       };
-    }, [status, colorT, scale]);
+    }, [status, colors, colorT, scale]);
 
     const backgroundColor = colorT.interpolate({
       inputRange: [0, 1],
@@ -232,6 +236,16 @@ const NodeBoxView = memo(
       inputRange: [0, 1],
       outputRange: [range.from.borderWidth, range.to.borderWidth],
     });
+    const fromBar = range.from.statusColor;
+    const toBar = range.to.statusColor;
+    const barColor =
+      fromBar != null && toBar != null
+        ? colorT.interpolate({
+            inputRange: [0, 1],
+            outputRange: [fromBar, toBar],
+          })
+        : toBar;
+    const badgeColor = toBar;
 
     return (
       <Animated.View
@@ -244,74 +258,100 @@ const NodeBoxView = memo(
           zIndex: 3,
           opacity: pos.opacity,
           transform: [{ translateX: pos.tx }, { translateY: pos.ty }, { scale }],
-          alignItems: "center",
-          justifyContent: "center",
-          paddingHorizontal: 8,
         }}
       >
         <Animated.View
           style={{
-            position: "absolute",
-            left: 0,
-            top: 0,
-            right: 0,
-            bottom: 0,
+            flex: 1,
             backgroundColor,
             borderColor,
             borderWidth,
+            borderRadius: NODE_RADIUS,
             borderStyle: range.to.dashed ? "dashed" : "solid",
-            boxShadow: [{ offsetX: 0, offsetY: 3, blurRadius: 8, color: "#00000059" }],
+            boxShadow: range.to.boxShadow,
+            overflow: "visible",
           }}
-        />
-        {running ? (
-          <Animated.View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              left: -4,
-              top: -4,
-              right: -4,
-              bottom: -4,
-              borderWidth: 2,
-              borderColor: "#38BDF8",
-              opacity: pulse,
-            }}
-          />
-        ) : null}
-        {mode === "root" ? (
-          <Text
-            selectable={false}
-            style={{
-              color: NODE_LABEL_COLOR,
-              textAlign: "center",
-              fontSize: 12,
-              lineHeight: LINE_HEIGHT,
-            }}
-            numberOfLines={2}
-          >
-            {name}
-          </Text>
-        ) : (
-          labelLines.map((line, lineIndex) => {
-            const primary = status != null && lineIndex === 0;
-            return (
+        >
+          {barColor != null ? (
+            <Animated.View
+              style={{
+                position: "absolute",
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: STATUS_BAR_WIDTH,
+                backgroundColor: barColor,
+                borderTopLeftRadius: NODE_RADIUS,
+                borderBottomLeftRadius: NODE_RADIUS,
+              }}
+            />
+          ) : null}
+          {status != null && badgeColor != null ? (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                paddingLeft: 10,
+                paddingRight: 8,
+                paddingTop: 6,
+                height: BADGE_HEIGHT,
+                gap: 4,
+              }}
+            >
+              <Icon name={STATUS_ICON[status]} size={12} color={badgeColor} />
               <Text
-                key={lineIndex}
                 selectable={false}
-                style={{
-                  color: primary ? NODE_LABEL_COLOR : "#3F3F46",
-                  textAlign: "center",
-                  fontSize: primary ? 13 : 11,
-                  ...(primary ? { fontWeight: "600" as const } : {}),
-                  lineHeight: LINE_HEIGHT,
-                }}
+                style={{ color: badgeColor, fontSize: 11, lineHeight: 14 }}
                 numberOfLines={1}
               >
-                {line}
+                {status}
               </Text>
-            );
-          })
-        )}
+            </View>
+          ) : null}
+          <View
+            style={{
+              flex: 1,
+              justifyContent: "center",
+              paddingHorizontal: 10,
+              paddingBottom: 10,
+            }}
+          >
+            {mode === "root" ? (
+              <Text
+                selectable={false}
+                style={{
+                  color: colors.foreground,
+                  textAlign: "center",
+                  fontSize: 12,
+                  lineHeight: LINE_HEIGHT,
+                }}
+                numberOfLines={2}
+              >
+                {name}
+              </Text>
+            ) : (
+              labelLines.map((line, lineIndex) => {
+                const primary = lineIndex === 0;
+                return (
+                  <Text
+                    key={lineIndex}
+                    selectable={false}
+                    style={{
+                      color: primary ? colors.foreground : colors.foregroundMuted,
+                      textAlign: "center",
+                      fontSize: primary ? 13 : 11,
+                      ...(primary ? { fontWeight: "600" as const } : {}),
+                      lineHeight: LINE_HEIGHT,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {line}
+                  </Text>
+                );
+              })
+            )}
+          </View>
+        </Animated.View>
       </Animated.View>
     );
   },
@@ -322,12 +362,19 @@ const NodeBoxView = memo(
     prev.width === next.width &&
     prev.height === next.height &&
     prev.pos === next.pos &&
-    prev.pulse === next.pulse &&
-    prev.running === next.running &&
+    prev.colors === next.colors &&
     sameLines(prev.labelLines, next.labelLines),
 );
 
-function EdgeSegmentView({ color, pos }: { color: string; pos: SegPos }) {
+function EdgeSegmentView({
+  color,
+  pos,
+  thickness,
+}: {
+  color: string;
+  pos: SegPos;
+  thickness: number;
+}) {
   const rotate = pos.deg.interpolate({
     inputRange: [-360, 360],
     outputRange: ["-360deg", "360deg"],
@@ -339,7 +386,7 @@ function EdgeSegmentView({ color, pos }: { color: string; pos: SegPos }) {
         left: pos.left,
         top: pos.top,
         width: pos.width,
-        height: 2,
+        height: thickness,
         backgroundColor: color,
         opacity: pos.opacity,
         transform: [{ rotate }],
@@ -353,11 +400,11 @@ function EdgeSegmentView({ color, pos }: { color: string; pos: SegPos }) {
 export function GraphCanvas({
   view,
   placed,
-  edgeColor,
+  colors,
 }: {
   view: GraphView;
   placed: PlacedGraph;
-  edgeColor: string;
+  colors: GraphThemeColors;
 }) {
   const nodePos = useRef(new Map<string, NodePos>());
   const segPos = useRef(new Map<string, SegPos>());
@@ -805,11 +852,24 @@ export function GraphCanvas({
             if (pos == null) {
               return null;
             }
-            return <EdgeSegmentView key={segment.key} color={edgeColor} pos={pos} />;
+            const runningIncoming = runningSet.has(path.to);
+            return (
+              <EdgeSegmentView
+                key={segment.key}
+                color={runningIncoming ? colors.accent : colors.border}
+                thickness={runningIncoming ? 2 : 1}
+                pos={pos}
+              />
+            );
           }),
         )}
         {segGhosts.map((ghost) => (
-          <EdgeSegmentView key={`ghost-${ghost.key}`} color={edgeColor} pos={ghost.pos} />
+          <EdgeSegmentView
+            key={`ghost-${ghost.key}`}
+            color={colors.border}
+            thickness={1}
+            pos={ghost.pos}
+          />
         ))}
       </Animated.View>
       {hasRunning
@@ -829,7 +889,7 @@ export function GraphCanvas({
                   width: FLOW_DOT,
                   height: FLOW_DOT,
                   borderRadius: FLOW_DOT / 2,
-                  backgroundColor: "#38BDF8",
+                  backgroundColor: colors.accent,
                   zIndex: 2,
                   transform: [{ translateX: dot.x }, { translateY: dot.y }],
                 }}
@@ -846,8 +906,7 @@ export function GraphCanvas({
           width={placed.rootBox.width}
           height={placed.rootBox.height}
           pos={nodePos.current.get(view.root.id)!}
-          pulse={pulse}
-          running={view.root.status === "실행 중"}
+          colors={colors}
         />
       ) : null}
       {view.nodes.map((node) => {
@@ -866,8 +925,7 @@ export function GraphCanvas({
             width={box.width}
             height={box.height}
             pos={pos}
-            pulse={pulse}
-            running={node.status === "실행 중"}
+            colors={colors}
           />
         );
       })}
@@ -881,8 +939,7 @@ export function GraphCanvas({
           width={ghost.width}
           height={ghost.height}
           pos={ghost.pos}
-          pulse={pulse}
-          running={false}
+          colors={colors}
         />
       ))}
     </View>
