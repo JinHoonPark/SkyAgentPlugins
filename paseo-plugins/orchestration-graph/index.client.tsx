@@ -1,5 +1,6 @@
 import type { PluginClientContext } from "@getpaseo/plugin/client";
 import { registerStop, stopAll } from "./client/cleanup";
+import { GraphPopoverContent } from "./client/graph-popover";
 import { OrchestrationGraphPanel } from "./client/panel";
 
 export default function contribute(client: PluginClientContext) {
@@ -29,10 +30,8 @@ export default function contribute(client: PluginClientContext) {
         icon: "Workflow",
         label: "그래프",
         behavior: {
-          kind: "action",
-          onPress: () => {
-            client.openPanel("orchestration-graph", { workspaceId, agentId });
-          },
+          kind: "popover",
+          Content: GraphPopoverContent,
         },
       },
     });
