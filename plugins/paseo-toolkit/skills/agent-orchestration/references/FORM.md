@@ -124,7 +124,25 @@ flowchart TD
 작업 : FORM.md 작성
 ```
 
-레벨 1은 `기록` 줄을 더한다 — `references/level1.md`의 「레벨 1의 `GRAPH.md` 기록」에서 알리기로 한 경로다.
+레벨 1은 워커 코드블록들 앞에 머리말을 1회 낸다 — `### 목적 —` 한 줄과 mermaid 블록이다.
+mermaid는 `GRAPH.md`에 쓴 블록의 사본이고 리더(생성자)는 넣지 않는다. 노드 표는 내지 않는다.
+
+````text
+### 목적 — 로그 오류와 설정 파일을 나눠 조사한다
+
+```mermaid
+---
+config:
+  flowchart:
+    wrappingWidth: 500
+---
+flowchart TD
+    N1["[ N1 · 단순 탐색 ]<br/>gpt-5.6-luna<br/>로그에서 오류 수집"]
+    N2["[ N2 · 리뷰·검증 ]<br/>gpt-5.6-sol<br/>설정 파일 검토"]
+```
+````
+
+머리말 뒤에 워커 코드블록이 하나씩 이어진다. 레벨 1은 `기록` 줄을 더한다 — `references/level1.md`의 「레벨 1의 `GRAPH.md` 기록」에서 알리기로 한 경로다.
 
 ```text
 이름 : 구현
