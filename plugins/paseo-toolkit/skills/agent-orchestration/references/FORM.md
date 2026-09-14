@@ -80,6 +80,30 @@ flowchart TD
 | N4 | 고급 명령 실행 - Claude — 커밋 | nodes/N2.md · nodes/N3.md | nodes/N4.failure.md | nodes/N4.failure.md가 없다 | 공유(local) | 예 | 불가 | 대기 | |
 ````
 
+레벨 1(엣지 없는 팬아웃)은 작업 사이에 의존이 없으므로 노드 사이에 화살표를 그리지 않고 각 노드를 따로 나열한다. 아래는 활성 큐 기동을 마친 뒤의 견본이다 — 되돌리기 `예`인 N4는 기동 직전 별도 승인을 기다리므로 `대기`이고 `agentId`가 비어 있다.
+
+````text
+```mermaid
+---
+config:
+  flowchart:
+    wrappingWidth: 500
+---
+flowchart TD
+    N1["[ N1 · 단순 탐색 ]<br/>gpt-5.6-luna<br/>로그에서 오류 수집"]
+    N2["[ N2 · 리뷰·검증 ]<br/>gpt-5.6-sol<br/>설정 파일 검토"]
+    N3["[ N3 · 고급 명령 실행 - Codex ]<br/>gpt-5.6-terra<br/>빌드·테스트 실행"]
+    N4["[ N4 · 고급 명령 실행 - Claude ]<br/>claude-sonnet-5<br/>원격 브랜치 정리"]
+```
+
+| 노드 ID | 프로필 | 입력 | 결과 파일 | 합격 기준 | 워크스페이스 | 되돌리기 | 재시도 | 상태 | agentId |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| N1 | 단순 탐색 — 로그 오류 수집 | 리더 브리핑 | nodes/N1.md / nodes/N1.failure.md | nodes/N1.md에 오류 목록이 있다 | 공유(local) | 아니오 | 가능 · 한도 1 · 사용 0 | 실행 중 | 8f2a1c4e-3b6d-4a91-9c0e-1d2b3a4c5d6e |
+| N2 | 리뷰·검증 — 설정 파일 검토 | 리더 브리핑 | nodes/N2.md / nodes/N2.failure.md | nodes/N2.md에 검토 결과가 있다 | 공유(local) | 아니오 | 가능 · 한도 1 · 사용 0 | 실행 중 | 1a9b0c2d-4e5f-6789-abcd-ef0123456789 |
+| N3 | 고급 명령 실행 - Codex — 빌드·테스트 | 리더 브리핑 | nodes/N3.md / nodes/N3.failure.md | nodes/N3.md에 빌드·테스트 기록이 있다 | 공유(local) | 아니오 | 불가 | 실행 중 | 2b0c1d3e-5f60-789a-bcde-f01234567890 |
+| N4 | 고급 명령 실행 - Claude — 원격 브랜치 정리 | 리더 브리핑 | nodes/N4.failure.md | nodes/N4.failure.md가 없다 | 공유(local) | 예 | 불가 | 대기 | |
+````
+
 ## 기동 보고
 
 `{이름}`은 프로필 이름, `{작업}`은 맡은 일 한 줄이다. `{모델}`은 확인값
@@ -98,4 +122,14 @@ flowchart TD
 모델 : grok/grok-4.6 [ xhigh ]
 모드 : 없음
 작업 : FORM.md 작성
+```
+
+레벨 1은 `기록` 줄을 더한다 — `references/level1.md`의 「레벨 1의 `GRAPH.md` 기록」에서 알리기로 한 경로다.
+
+```text
+이름 : 구현
+모델 : grok/grok-4.6 [ xhigh ]
+모드 : 없음
+작업 : FORM.md 작성
+기록 : `.skywork/paseo-orchestration/2026-09-13-form-wording/GRAPH.md`
 ```
