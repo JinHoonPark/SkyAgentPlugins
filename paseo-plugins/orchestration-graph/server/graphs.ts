@@ -170,26 +170,158 @@ export function parseMermaid(markdown: string): ParsedMermaid {
   };
 
   for (const line of body.split(/\r?\n/)) {
-    const labelRe = /([A-Za-z][A-Za-z0-9_]*)\["((?:[^"\\]|\\.)*)"\]/g;
-    for (const match of line.matchAll(labelRe)) {
-      addNode(match[1]);
-      if (labels[match[1]] == null) {
-        labels[match[1]] = match[2].split("<br/>");
+    const tokens = tokenizeMermaidLine(line);
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i];
+      if (token != null && token.kind === "node" && token.label != null) {
+        addNode(token.id);
+        if (labels[token.id] == null) {
+          labels[token.id] = token.label.split("<br/>");
+        }
       }
-    }
-    const edgeRe = /([A-Za-z][A-Za-z0-9_]*)(?:\["(?:[^"\\]|\\.)*"\])?\s*-->\s*([A-Za-z][A-Za-z0-9_]*)/g;
-    for (const match of line.matchAll(edgeRe)) {
-      addNode(match[1]);
-      addNode(match[2]);
-      const key = match[1] + "\0" + match[2];
+
+      const from = tokens[i];
+      const arrow = tokens[i + 1];
+      const to = tokens[i + 2];
+      if (
+        from == null ||
+        from.kind !== "node" ||
+        arrow == null ||
+        arrow.kind !== "arrow" ||
+        to == null ||
+        to.kind !== "node"
+      ) {
+        continue;
+      }
+      addNode(from.id);
+      addNode(to.id);
+      const key = from.id + "\0" + to.id;
       if (!seenEdges.has(key)) {
         seenEdges.add(key);
-        edges.push({ from: match[1], to: match[2] });
+        edges.push({ from: from.id, to: to.id });
       }
     }
   }
 
   return { edges, labels, nodeIds };
+}
+
+type MermaidToken = { kind: "node"; id: string; label: string | null } | { kind: "arrow" };
+
+const NODE_ID_RE = /[A-Za-z][A-Za-z0-9_]*/y;
+// Mermaid의 엣지 연산자. 라벨을 포함한 표기가 앞에 와야 `-->` 같은 짧은 표기가 먼저 먹지 않는다.
+const ARROW_PATTERNS: RegExp[] = [
+  /-->\s*\|[^|]*\|/, // -->|라벨|
+  /-\.->/, // -.->
+  /-\.\s*(?:"(?:[^"\\]|\\.)*"|.*?)\s*\.->/, // -. 라벨 .->
+  /-->/, // -->
+  /--\s*(?:"(?:[^"\\]|\\.)*"|.*?)\s*-->/, // -- 라벨 -->
+];
+
+function tokenizeMermaidLine(line: string): MermaidToken[] {
+  const tokens: MermaidToken[] = [];
+  let index = 0;
+  while (index < line.length) {
+    const char = line[index];
+    if (char === " " || char === "\t") {
+      index++;
+      continue;
+    }
+    if (char === "%") {
+      break; // 주석
+    }
+
+    const node = readMermaidNode(line, index);
+    if (node != null) {
+      tokens.push({ kind: "node", id: node.id, label: node.label });
+      index = node.end;
+      continue;
+    }
+
+    const arrowEnd = readMermaidArrow(line, index);
+    if (arrowEnd != null) {
+      tokens.push({ kind: "arrow" });
+      index = arrowEnd;
+      continue;
+    }
+
+    index++;
+  }
+  return tokens;
+}
+
+function readMermaidNode(line: string, start: number) {
+  NODE_ID_RE.lastIndex = start;
+  const match = NODE_ID_RE.exec(line);
+  if (match == null || match.index !== start) {
+    return null;
+  }
+
+  const id = match[0];
+  let index = start + id.length;
+  let label: string | null = null;
+
+  if (line.startsWith("{{", index)) {
+    const body = readShapeBody(line, index + 2, "}}");
+    if (body != null) {
+      label = body.value;
+      index = body.end;
+    }
+  } else if (line[index] === "[") {
+    const body = readShapeBody(line, index + 1, "]");
+    if (body != null) {
+      label = body.value;
+      index = body.end;
+    }
+  }
+
+  return { id, label, end: index };
+}
+
+function readShapeBody(line: string, start: number, close: string) {
+  if (line[start] === '"') {
+    const quoted = readQuoted(line, start);
+    if (quoted == null || !line.startsWith(close, quoted.end)) {
+      return null;
+    }
+    return { value: quoted.value, end: quoted.end + close.length };
+  }
+
+  const end = line.indexOf(close, start);
+  if (end < 0) {
+    return null;
+  }
+  return { value: line.slice(start, end), end: end + close.length };
+}
+
+function readQuoted(line: string, start: number) {
+  let value = "";
+  let index = start + 1;
+  while (index < line.length) {
+    const char = line[index];
+    if (char === "\\" && index + 1 < line.length) {
+      value += char + line[index + 1];
+      index += 2;
+      continue;
+    }
+    if (char === '"') {
+      return { value, end: index + 1 };
+    }
+    value += char;
+    index++;
+  }
+  return null;
+}
+
+function readMermaidArrow(line: string, start: number) {
+  for (const pattern of ARROW_PATTERNS) {
+    pattern.lastIndex = start;
+    const match = pattern.exec(line);
+    if (match != null && match.index === start) {
+      return start + match[0].length;
+    }
+  }
+  return null;
 }
 
 export function assembleGraph(
