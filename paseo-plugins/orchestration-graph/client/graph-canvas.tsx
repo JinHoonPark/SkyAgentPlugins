@@ -1,6 +1,6 @@
 import { Icon } from "@getpaseo/plugin/client/react-native";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Text, View } from "react-native";
+import { Animated, Pressable, Text, View } from "react-native";
 import type { GraphView } from "../shared/graphs";
 import { registerStop } from "./cleanup";
 import {
@@ -83,7 +83,11 @@ type NodeBoxProps = {
   height: number;
   pos: NodePos;
   colors: GraphThemeColors;
+  agentId: string | null;
+  onPress?: (agentId: string) => void;
 };
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 function sameLines(left: string[], right: string[]) {
   if (left === right) {
@@ -185,7 +189,19 @@ function stopTracked(stops: Map<string, () => void>, id: string) {
 }
 
 const NodeBoxView = memo(
-  function NodeBoxView({ mode, status, name, labelLines, width, height, pos, colors }: NodeBoxProps) {
+  function NodeBoxView({
+    mode,
+    status,
+    name,
+    labelLines,
+    width,
+    height,
+    pos,
+    colors,
+    agentId,
+    onPress,
+  }: NodeBoxProps) {
+    const press = agentId != null && onPress != null;
     const initial = statusVisual(status, colors);
     const scale = useRef(new Animated.Value(initial.scale)).current;
     const colorT = useRef(new Animated.Value(1)).current;
@@ -248,7 +264,9 @@ const NodeBoxView = memo(
     const badgeColor = toBar;
 
     return (
-      <Animated.View
+      <AnimatedPressable
+        disabled={!press}
+        onPress={press ? () => onPress(agentId) : undefined}
         style={{
           position: "absolute",
           left: 0,
@@ -352,7 +370,7 @@ const NodeBoxView = memo(
             )}
           </View>
         </Animated.View>
-      </Animated.View>
+      </AnimatedPressable>
     );
   },
   (prev, next) =>
@@ -363,6 +381,8 @@ const NodeBoxView = memo(
     prev.height === next.height &&
     prev.pos === next.pos &&
     prev.colors === next.colors &&
+    prev.agentId === next.agentId &&
+    prev.onPress === next.onPress &&
     sameLines(prev.labelLines, next.labelLines),
 );
 
@@ -401,10 +421,12 @@ export function GraphCanvas({
   view,
   placed,
   colors,
+  onNodePress,
 }: {
   view: GraphView;
   placed: PlacedGraph;
   colors: GraphThemeColors;
+  onNodePress?: (agentId: string) => void;
 }) {
   const nodePos = useRef(new Map<string, NodePos>());
   const segPos = useRef(new Map<string, SegPos>());
@@ -907,6 +929,8 @@ export function GraphCanvas({
           height={placed.rootBox.height}
           pos={nodePos.current.get(view.root.id)!}
           colors={colors}
+          agentId={view.root.id}
+          onPress={onNodePress}
         />
       ) : null}
       {view.nodes.map((node) => {
@@ -926,6 +950,8 @@ export function GraphCanvas({
             height={box.height}
             pos={pos}
             colors={colors}
+            agentId={node.agentId}
+            onPress={onNodePress}
           />
         );
       })}
@@ -940,6 +966,7 @@ export function GraphCanvas({
           height={ghost.height}
           pos={ghost.pos}
           colors={colors}
+          agentId={null}
         />
       ))}
     </View>

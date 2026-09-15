@@ -316,7 +316,13 @@ function AgentSnapshotTap({
   return null;
 }
 
-export function OrchestrationGraphPanel({ theme, layout, workspaceId, agentId }: PluginAgentPanelProps) {
+export function OrchestrationGraphPanel({
+  theme,
+  layout,
+  workspaceId,
+  agentId,
+  navigation,
+}: PluginAgentPanelProps) {
   const directory = useWorkspace(workspaceId, (workspace) => workspace.directory);
   const paseo = usePaseo();
   const [snapshots, setSnapshots] = useState<Map<string, GraphAgentSnapshot>>(() => new Map());
@@ -433,6 +439,16 @@ export function OrchestrationGraphPanel({ theme, layout, workspaceId, agentId }:
     () => (source == null ? null : applyLiveGraph(source, snapshots)),
     [source, snapshots],
   );
+  const graphRootAgentId = view?.root?.id ?? null;
+  const handleNodePress = useCallback(
+    (pressedAgentId: string) => {
+      if (graphRootAgentId == null) {
+        return;
+      }
+      navigation?.openAgent({ agentId: pressedAgentId });
+    },
+    [navigation, graphRootAgentId],
+  );
   const tapIds = useMemo(() => {
     const ids: string[] = [];
     const seen = new Set<string>();
@@ -536,7 +552,13 @@ export function OrchestrationGraphPanel({ theme, layout, workspaceId, agentId }:
               style={[styles.canvasWrap, { width: placed.canvasWidth, height: placed.canvasHeight }]}
               {...panResponder.panHandlers}
             >
-              <GraphCanvas key={graphName} view={view} placed={placed} colors={theme.colors} />
+              <GraphCanvas
+                key={graphName}
+                view={view}
+                placed={placed}
+                colors={theme.colors}
+                onNodePress={graphRootAgentId == null ? undefined : handleNodePress}
+              />
             </View>
           </ScrollView>
         </ScrollView>
