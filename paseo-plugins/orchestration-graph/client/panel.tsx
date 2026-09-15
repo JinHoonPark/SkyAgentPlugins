@@ -2,7 +2,7 @@ import type { PluginAgentPanelProps } from "@getpaseo/plugin/client";
 import { useAgent, usePaseo, useRpc, useWorkspace } from "@getpaseo/plugin/client";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { PanResponder, ScrollView, Text, View } from "react-native";
+import { Animated, PanResponder, Text, View } from "react-native";
 import {
   GRAPH_WAITING_LABEL,
   PARENT_AGENT_ID_LABEL,
@@ -37,6 +37,27 @@ const LANE_INSET = 14;
 const SKIP_STUB = 8;
 const SKIP_STAGGER = 6;
 const EDGE_STAGGER = 6;
+const PAN_KEEP_PX = 64;
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function panBounds(
+  canvasWidth: number,
+  canvasHeight: number,
+  viewportWidth: number,
+  viewportHeight: number,
+) {
+  const keepX = Math.min(canvasWidth, viewportWidth, PAN_KEEP_PX);
+  const keepY = Math.min(canvasHeight, viewportHeight, PAN_KEEP_PX);
+  return {
+    minX: keepX - canvasWidth,
+    maxX: viewportWidth - keepX,
+    minY: keepY - canvasHeight,
+    maxY: viewportHeight - keepY,
+  };
+}
 
 function segmentMetrics(ax: number, ay: number, bx: number, by: number): EdgeSegment | null {
   const dx = bx - ax;
@@ -105,11 +126,47 @@ function layoutGraph(
 ) {
   const colGap = compact ? 16 : 24;
   const rowGap = compact ? 28 : 40;
+  // An edge that points back at a node still being walked closes a cycle. Counting it as a
+  // predecessor would push the node it starts from above the node it returns to, so the flow inputs
+  // (depth, entry nodes, column order) drop it while `edges` keeps it for drawing.
+  const outgoing = new Map<string, string[]>();
+  for (const node of nodes) {
+    outgoing.set(node.id, []);
+  }
+  for (const edge of edges) {
+    outgoing.get(edge.from)?.push(edge.to);
+  }
+  const walking = new Set<string>();
+  const walked = new Set<string>();
+  const backEdges = new Set<string>();
+  const walk = (id: string) => {
+    walking.add(id);
+    for (const next of outgoing.get(id) ?? []) {
+      if (walked.has(next)) {
+        continue;
+      }
+      if (walking.has(next)) {
+        backEdges.add(`${id}-${next}`);
+        continue;
+      }
+      walk(next);
+    }
+    walking.delete(id);
+    walked.add(id);
+  };
+  for (const node of nodes) {
+    if (!walked.has(node.id)) {
+      walk(node.id);
+    }
+  }
   const incoming = new Map<string, string[]>();
   for (const node of nodes) {
     incoming.set(node.id, []);
   }
   for (const edge of edges) {
+    if (backEdges.has(`${edge.from}-${edge.to}`)) {
+      continue;
+    }
     incoming.get(edge.to)?.push(edge.from);
   }
   const entryIds = nodes.map((node) => node.id).filter((id) => (incoming.get(id)?.length ?? 0) === 0);
@@ -327,12 +384,11 @@ export function OrchestrationGraphPanel({
   const paseo = usePaseo();
   const [snapshots, setSnapshots] = useState<Map<string, GraphAgentSnapshot>>(() => new Map());
   const [fileView, setFileView] = useState<GraphView | null>(null);
-  const vScroll = useRef<ScrollView>(null);
-  const hScroll = useRef<ScrollView>(null);
-  const offsetX = useRef(0);
-  const offsetY = useRef(0);
-  const baseX = useRef(0);
-  const baseY = useRef(0);
+  const camera = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  const cameraValue = useRef({ x: 0, y: 0 });
+  const baseCamera = useRef({ x: 0, y: 0 });
+  const cameraBounds = useRef({ minX: 0, maxX: 0, minY: 0, maxY: 0 });
+  const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const panResponder = useMemo(
     () =>
       PanResponder.create({
@@ -341,15 +397,19 @@ export function OrchestrationGraphPanel({
         onPanResponderTerminationRequest: () => false,
         onShouldBlockNativeResponder: () => false,
         onPanResponderGrant: () => {
-          baseX.current = offsetX.current;
-          baseY.current = offsetY.current;
+          baseCamera.current = { ...cameraValue.current };
         },
         onPanResponderMove: (_event, gesture) => {
-          hScroll.current?.scrollTo({ x: baseX.current - gesture.dx, animated: false });
-          vScroll.current?.scrollTo({ y: baseY.current - gesture.dy, animated: false });
+          const limit = cameraBounds.current;
+          const next = {
+            x: clamp(baseCamera.current.x + gesture.dx, limit.minX, limit.maxX),
+            y: clamp(baseCamera.current.y + gesture.dy, limit.minY, limit.maxY),
+          };
+          cameraValue.current = next;
+          camera.setValue(next);
         },
       }),
-    [],
+    [camera],
   );
   const findGraphByAgent = useRpc(findGraphByAgentRpc);
   const getGraph = useRpc(getGraphRpc);
@@ -402,8 +462,8 @@ export function OrchestrationGraphPanel({
   }, [paseo, putSnapshot, graphName, workspaceId]);
   useEffect(() => {
     setFileView(null);
-    offsetX.current = 0;
-    offsetY.current = 0;
+    cameraValue.current = { x: 0, y: 0 };
+    camera.setValue({ x: 0, y: 0 });
     if (graphName == null || directory == null) {
       return;
     }
@@ -483,6 +543,21 @@ export function OrchestrationGraphPanel({
     // layoutKey already encodes root, node ids, label-line counts, edges, and compact.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- view identity changes on status ticks
   }, [layoutKey]);
+  useEffect(() => {
+    if (placed == null) {
+      return;
+    }
+    const limit = panBounds(placed.canvasWidth, placed.canvasHeight, viewport.width, viewport.height);
+    cameraBounds.current = limit;
+    const next = {
+      x: clamp(cameraValue.current.x, limit.minX, limit.maxX),
+      y: clamp(cameraValue.current.y, limit.minY, limit.maxY),
+    };
+    if (next.x !== cameraValue.current.x || next.y !== cameraValue.current.y) {
+      cameraValue.current = next;
+      camera.setValue(next);
+    }
+  }, [placed, viewport, camera]);
   const styles = useMemo(
     () => ({
       screen: {
@@ -501,7 +576,7 @@ export function OrchestrationGraphPanel({
         borderWidth: 1,
         overflow: "hidden" as const,
       },
-      graphViewport: { flex: 1 },
+      graphViewport: { flex: 1, overflow: "hidden" as const },
     }),
     [theme, layout.compact],
   );
@@ -532,36 +607,35 @@ export function OrchestrationGraphPanel({
         {found.isPending || (graphName != null && graph.isPending) ? <Text style={styles.label}>불러오는 중</Text> : null}
       </View>
       {view != null && placed != null ? (
-        <ScrollView
-          ref={vScroll}
+        <View
           style={styles.graphViewport}
-          nestedScrollEnabled
-          onScroll={(event) => {
-            offsetY.current = event.nativeEvent.contentOffset.y;
+          onLayout={(event) => {
+            const { width, height } = event.nativeEvent.layout;
+            setViewport((prev) =>
+              prev.width === width && prev.height === height ? prev : { width, height },
+            );
           }}
         >
-          <ScrollView
-            ref={hScroll}
-            horizontal
-            nestedScrollEnabled
-            onScroll={(event) => {
-              offsetX.current = event.nativeEvent.contentOffset.x;
-            }}
+          <Animated.View
+            style={[
+              styles.canvasWrap,
+              {
+                width: placed.canvasWidth,
+                height: placed.canvasHeight,
+                transform: [{ translateX: camera.x }, { translateY: camera.y }],
+              },
+            ]}
+            {...panResponder.panHandlers}
           >
-            <View
-              style={[styles.canvasWrap, { width: placed.canvasWidth, height: placed.canvasHeight }]}
-              {...panResponder.panHandlers}
-            >
-              <GraphCanvas
-                key={graphName}
-                view={view}
-                placed={placed}
-                colors={theme.colors}
-                onNodePress={graphRootAgentId == null ? undefined : handleNodePress}
-              />
-            </View>
-          </ScrollView>
-        </ScrollView>
+            <GraphCanvas
+              key={graphName}
+              view={view}
+              placed={placed}
+              colors={theme.colors}
+              onNodePress={graphRootAgentId == null ? undefined : handleNodePress}
+            />
+          </Animated.View>
+        </View>
       ) : null}
     </View>
   );
