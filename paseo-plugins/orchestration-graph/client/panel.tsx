@@ -1,3 +1,4 @@
+import dagre from "@dagrejs/dagre";
 import type { PluginAgentPanelProps } from "@getpaseo/plugin/client";
 import { useAgent, usePaseo, useRpc, useWorkspace } from "@getpaseo/plugin/client";
 import { useQuery } from "@tanstack/react-query";
@@ -32,11 +33,6 @@ const ROOT_HEIGHT = BADGE_HEIGHT + NODE_PAD_Y * 2 + LINE_HEIGHT * 2 + 12;
 const NODE_WIDTH = 260;
 const PAD = 16;
 const FILE_POLL_MS = 2000;
-const LANE_PITCH = 18;
-const LANE_INSET = 14;
-const SKIP_STUB = 8;
-const SKIP_STAGGER = 6;
-const EDGE_STAGGER = 6;
 const PAN_KEEP_PX = 64;
 
 function clamp(value: number, min: number, max: number) {
@@ -71,7 +67,8 @@ function segmentMetrics(ax: number, ay: number, bx: number, by: number): EdgeSeg
     left: ax,
     top: ay - 1,
     width: Math.round(length),
-    deg: Math.abs(dx) >= Math.abs(dy) ? (dx >= 0 ? 0 : 180) : dy >= 0 ? 90 : -90,
+    // dagre routes with diagonal bends, so the rotation is the real angle of the segment.
+    deg: (Math.atan2(dy, dx) * 180) / Math.PI,
   };
 }
 
@@ -91,253 +88,88 @@ function nodeHeight(lineCount: number) {
   return BADGE_HEIGHT + NODE_PAD_Y * 2 + Math.max(1, lineCount) * LINE_HEIGHT;
 }
 
-function bottomCenter(node: NodeBox) {
-  return { x: node.left + node.width / 2, y: node.top + node.height };
-}
-
-function topCenter(node: NodeBox) {
-  return { x: node.left + node.width / 2, y: node.top };
-}
-
-function staggerOffset(index: number, count: number) {
-  return (index - (count - 1) / 2) * EDGE_STAGGER;
-}
-
-function orthoPoints(from: NodeBox, to: NodeBox, midOffset: number): Array<{ x: number; y: number }> {
-  const start = bottomCenter(from);
-  const end = topCenter(to);
-  const midY = start.y + (end.y - start.y) / 2 + midOffset;
-  const points = [
-    { x: start.x, y: start.y },
-    { x: start.x, y: midY },
-  ];
-  if (Math.abs(end.x - start.x) >= 1) {
-    points.push({ x: end.x, y: midY });
-  }
-  points.push({ x: end.x, y: end.y });
-  return points;
-}
-
 function layoutGraph(
   root: { id: string } | null,
   nodes: Array<{ id: string; labelLines: string[] }>,
   edges: Array<{ from: string; to: string }>,
   compact: boolean,
 ) {
-  const colGap = compact ? 16 : 24;
-  const rowGap = compact ? 28 : 40;
-  // An edge that points back at a node still being walked closes a cycle. Counting it as a
-  // predecessor would push the node it starts from above the node it returns to, so the flow inputs
-  // (depth, entry nodes, column order) drop it while `edges` keeps it for drawing.
-  const outgoing = new Map<string, string[]>();
-  for (const node of nodes) {
-    outgoing.set(node.id, []);
-  }
-  for (const edge of edges) {
-    outgoing.get(edge.from)?.push(edge.to);
-  }
-  const walking = new Set<string>();
-  const walked = new Set<string>();
-  const backEdges = new Set<string>();
-  const walk = (id: string) => {
-    walking.add(id);
-    for (const next of outgoing.get(id) ?? []) {
-      if (walked.has(next)) {
-        continue;
-      }
-      if (walking.has(next)) {
-        backEdges.add(`${id}-${next}`);
-        continue;
-      }
-      walk(next);
-    }
-    walking.delete(id);
-    walked.add(id);
-  };
-  for (const node of nodes) {
-    if (!walked.has(node.id)) {
-      walk(node.id);
-    }
-  }
-  const incoming = new Map<string, string[]>();
-  for (const node of nodes) {
-    incoming.set(node.id, []);
-  }
-  for (const edge of edges) {
-    if (backEdges.has(`${edge.from}-${edge.to}`)) {
-      continue;
-    }
-    incoming.get(edge.to)?.push(edge.from);
-  }
-  const entryIds = nodes.map((node) => node.id).filter((id) => (incoming.get(id)?.length ?? 0) === 0);
-  const orderIndex = new Map(nodes.map((node, index) => [node.id, index]));
+  const graph = new dagre.graphlib.Graph();
+  graph.setGraph({
+    rankdir: "TB",
+    nodesep: compact ? 16 : 24,
+    ranksep: compact ? 28 : 40,
+  });
+  graph.setDefaultEdgeLabel(() => ({}));
   const sizes = new Map(
     nodes.map((node) => [node.id, { width: NODE_WIDTH, height: nodeHeight(node.labelLines.length) }]),
   );
-  const depth = new Map<string, number>();
-  const visiting = new Set<string>();
-  const dep = (id: string): number => {
-    const cached = depth.get(id);
-    if (cached != null) {
-      return cached;
-    }
-    if (visiting.has(id)) {
-      return 0;
-    }
-    visiting.add(id);
-    const preds = incoming.get(id) ?? [];
-    const value = preds.length === 0 ? 0 : 1 + Math.max(...preds.map(dep));
-    visiting.delete(id);
-    depth.set(id, value);
-    return value;
-  };
-  for (const node of nodes) {
-    dep(node.id);
-  }
-  const layers: string[][] = [];
-  for (const node of nodes) {
-    const layer = depth.get(node.id) ?? 0;
-    while (layers.length <= layer) {
-      layers.push([]);
-    }
-    layers[layer].push(node.id);
-  }
-  const predX = new Map<string, number>();
-  const avgPredX = (id: string) => {
-    const xs = (incoming.get(id) ?? [])
-      .map((pred) => predX.get(pred))
-      .filter((x): x is number => x != null);
-    if (xs.length === 0) {
-      return orderIndex.get(id) ?? 0;
-    }
-    return xs.reduce((sum, x) => sum + x, 0) / xs.length;
-  };
-  const orderedLayers: string[][] = [];
-  for (let layerIndex = 0; layerIndex < layers.length; layerIndex++) {
-    const layer = layers[layerIndex];
-    const ordered =
-      layerIndex === 0
-        ? [...layer].sort((a, b) => (orderIndex.get(a) ?? 0) - (orderIndex.get(b) ?? 0))
-        : [...layer].sort((a, b) => {
-            const delta = avgPredX(a) - avgPredX(b);
-            if (delta !== 0) {
-              return delta;
-            }
-            return (orderIndex.get(a) ?? 0) - (orderIndex.get(b) ?? 0);
-          });
-    ordered.forEach((id, index) => {
-      predX.set(id, index);
-    });
-    orderedLayers.push(ordered);
-  }
-  const layerWidths = orderedLayers.map((layer) =>
-    layer.length === 0 ? 0 : layer.length * NODE_WIDTH + (layer.length - 1) * colGap,
-  );
-  let canvasWidth = Math.max(PAD * 2 + ROOT_WIDTH, PAD * 2, ...layerWidths.map((width) => width + PAD * 2));
-  const boxes = new Map<string, NodeBox>();
   if (root != null) {
-    boxes.set(root.id, {
-      id: root.id,
-      left: Math.round((canvasWidth - ROOT_WIDTH) / 2),
-      top: PAD,
-      width: ROOT_WIDTH,
-      height: ROOT_HEIGHT,
-    });
+    graph.setNode(root.id, { width: ROOT_WIDTH, height: ROOT_HEIGHT });
   }
-  let top = PAD + (root == null ? 0 : ROOT_HEIGHT + rowGap);
-  for (const layer of orderedLayers) {
-    const width = layer.length === 0 ? 0 : layer.length * NODE_WIDTH + (layer.length - 1) * colGap;
-    const rowLeft = Math.round((canvasWidth - width) / 2);
-    let rowHeight = nodeHeight(1);
-    layer.forEach((id, index) => {
-      const size = sizes.get(id) ?? { width: NODE_WIDTH, height: nodeHeight(1) };
-      rowHeight = Math.max(rowHeight, size.height);
-      boxes.set(id, {
-        id,
-        left: rowLeft + index * (NODE_WIDTH + colGap),
-        top,
-        width: size.width,
-        height: size.height,
-      });
-    });
-    top += rowHeight + rowGap;
-  }
-  const skipEdges = edges.filter((edge) => (depth.get(edge.to) ?? 0) - (depth.get(edge.from) ?? 0) >= 2);
-  const gutter = skipEdges.length === 0 ? 0 : LANE_INSET + skipEdges.length * LANE_PITCH + LANE_INSET;
-  if (gutter > 0) {
-    for (const box of boxes.values()) {
-      box.left += gutter;
-    }
-    canvasWidth += gutter;
-  }
-  let maxBottom = PAD + (root == null ? 0 : ROOT_HEIGHT);
-  for (const box of boxes.values()) {
-    maxBottom = Math.max(maxBottom, box.top + box.height);
-  }
-  const rootBox = root == null ? null : (boxes.get(root.id) ?? null);
-  const paths: EdgePath[] = [];
-  const skipKeys = new Set(skipEdges.map((edge) => `${edge.from}-${edge.to}`));
-  skipEdges.forEach((edge, index) => {
-    const from = boxes.get(edge.from);
-    const to = boxes.get(edge.to);
-    if (from == null || to == null) {
-      return;
-    }
-    const start = bottomCenter(from);
-    const end = topCenter(to);
-    const laneX = LANE_INSET + LANE_PITCH * index + LANE_PITCH / 2;
-    const y1 = from.top + from.height + SKIP_STUB + index * SKIP_STAGGER;
-    const y2 = to.top - SKIP_STUB - index * SKIP_STAGGER;
-    const segments = segmentsFromPoints(`${edge.from}-${edge.to}`, [
-      { x: start.x, y: start.y },
-      { x: start.x, y: y1 },
-      { x: laneX, y: y1 },
-      { x: laneX, y: y2 },
-      { x: end.x, y: y2 },
-      { x: end.x, y: end.y },
-    ]);
-    paths.push({ key: `${edge.from}-${edge.to}`, from: edge.from, to: edge.to, segments });
-  });
-  const grouped = new Map<string, Array<{ from: string; to: string; key: string }>>();
-  const addOrtho = (from: string, to: string, key: string) => {
-    const list = grouped.get(from) ?? [];
-    list.push({ from, to, key });
-    grouped.set(from, list);
-  };
-  if (root != null) {
-    for (const id of entryIds) {
-      addOrtho(root.id, id, `root-${id}`);
-    }
-  }
-  for (const edge of edges) {
-    if (skipKeys.has(`${edge.from}-${edge.to}`)) {
-      continue;
-    }
-    addOrtho(edge.from, edge.to, `${edge.from}-${edge.to}`);
+  for (const node of nodes) {
+    const size = sizes.get(node.id) ?? { width: NODE_WIDTH, height: nodeHeight(1) };
+    graph.setNode(node.id, { width: size.width, height: size.height });
   }
   const incomingCount = new Map<string, number>();
-  const incomingSeen = new Map<string, number>();
-  for (const list of grouped.values()) {
-    for (const edge of list) {
-      incomingCount.set(edge.to, (incomingCount.get(edge.to) ?? 0) + 1);
+  for (const edge of edges) {
+    graph.setEdge(edge.from, edge.to);
+    incomingCount.set(edge.to, (incomingCount.get(edge.to) ?? 0) + 1);
+  }
+  const entryIds = nodes
+    .map((node) => node.id)
+    .filter((id) => (incomingCount.get(id) ?? 0) === 0);
+  if (root != null) {
+    for (const id of entryIds) {
+      graph.setEdge(root.id, id);
     }
   }
-  for (const list of grouped.values()) {
-    list.forEach((edge, index) => {
-      const from = boxes.get(edge.from);
-      const to = boxes.get(edge.to);
-      if (from == null || to == null) {
-        return;
-      }
-      const inIndex = incomingSeen.get(edge.to) ?? 0;
-      incomingSeen.set(edge.to, inIndex + 1);
-      const midOffset =
-        staggerOffset(index, list.length) + staggerOffset(inIndex, incomingCount.get(edge.to) ?? 1);
-      const segments = segmentsFromPoints(edge.key, orthoPoints(from, to, midOffset));
-      if (segments.length > 0) {
-        paths.push({ key: edge.key, from: edge.from, to: edge.to, segments });
-      }
-    });
+  // dagre resolves cycles itself, so a back edge is laid out like any other edge and stays in the
+  // drawing. Node coordinates are centers; boxes are top-left based.
+  dagre.layout(graph);
+  const boxes = new Map<string, NodeBox>();
+  const place = (id: string, width: number, height: number) => {
+    const node = graph.node(id) as { x: number; y: number } | undefined;
+    const box: NodeBox = {
+      id,
+      left: Math.round((node?.x ?? 0) - width / 2) + PAD,
+      top: Math.round((node?.y ?? 0) - height / 2) + PAD,
+      width,
+      height,
+    };
+    boxes.set(id, box);
+    return box;
+  };
+  for (const node of nodes) {
+    const size = sizes.get(node.id) ?? { width: NODE_WIDTH, height: nodeHeight(1) };
+    place(node.id, size.width, size.height);
+  }
+  const rootBox = root == null ? null : place(root.id, ROOT_WIDTH, ROOT_HEIGHT);
+  let canvasWidth = PAD * 2;
+  let canvasHeight = PAD * 2;
+  for (const box of boxes.values()) {
+    canvasWidth = Math.max(canvasWidth, box.left + box.width + PAD);
+    canvasHeight = Math.max(canvasHeight, box.top + box.height + PAD);
+  }
+  const paths: EdgePath[] = [];
+  const addPath = (key: string, from: string, to: string) => {
+    const label = graph.edge(from, to) as { points?: Array<{ x: number; y: number }> } | undefined;
+    const points = (label?.points ?? []).map((point) => ({ x: point.x + PAD, y: point.y + PAD }));
+    if (points.length < 2) {
+      return;
+    }
+    const segments = segmentsFromPoints(key, points);
+    if (segments.length > 0) {
+      paths.push({ key, from, to, segments });
+    }
+  };
+  for (const edge of edges) {
+    addPath(`${edge.from}-${edge.to}`, edge.from, edge.to);
+  }
+  if (root != null) {
+    for (const id of entryIds) {
+      addPath(`root-${id}`, root.id, id);
+    }
   }
   const segments = paths.flatMap((path) => path.segments);
   const placed: PlacedGraph = {
@@ -347,7 +179,7 @@ function layoutGraph(
     segments,
     paths,
     canvasWidth,
-    canvasHeight: maxBottom + PAD,
+    canvasHeight,
   };
   return placed;
 }
