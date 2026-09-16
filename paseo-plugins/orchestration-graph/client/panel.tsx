@@ -14,13 +14,15 @@ import {
   layoutSignature,
   readGraphFileRpc,
   type GraphAgentSnapshot,
+  type GraphNodeShape,
   type GraphView,
 } from "../shared/graphs";
 import { registerStop } from "./cleanup";
-import { GraphCanvas } from "./graph-canvas";
+import { GraphCanvas, type LabelHover } from "./graph-canvas";
 import { applyLiveGraph, toAgentSnapshot } from "./live-graph";
 import {
   BADGE_HEIGHT,
+  GATE_ARM_WIDTH,
   LINE_HEIGHT,
   type EdgePath,
   type EdgeSegment,
@@ -35,7 +37,12 @@ const NODE_WIDTH = 260;
 const PAD = 16;
 const FILE_POLL_MS = 2000;
 const PAN_KEEP_PX = 64;
+const PAN_MOVE_THRESHOLD = 2;
 const NO_GRAPH_NAMES: string[] = [];
+/** 잘린 라벨 툴팁의 폭과, 실측 전에 쓰는 높이 어림값. */
+const TOOLTIP_WIDTH = 220;
+const TOOLTIP_ESTIMATED_HEIGHT = 34;
+const TOOLTIP_MARGIN = 8;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -91,21 +98,31 @@ function nodeHeight(lineCount: number) {
   return BADGE_HEIGHT + NODE_PAD_Y * 2 + Math.max(1, lineCount) * LINE_HEIGHT;
 }
 
+/** 육각형 게이트는 좌우 삼각형만큼 넓은 상자에 담긴다. 선은 그 상자 경계에서 멈춘다. */
+function nodeWidth(shape: GraphNodeShape) {
+  return shape === "hexagon" ? NODE_WIDTH + GATE_ARM_WIDTH * 2 : NODE_WIDTH;
+}
+
 function layoutGraph(
   root: { id: string } | null,
-  nodes: Array<{ id: string; labelLines: string[] }>,
-  edges: Array<{ from: string; to: string }>,
+  nodes: Array<{ id: string; labelLines: string[]; shape: GraphNodeShape }>,
+  edges: Array<{ from: string; to: string; dashed: boolean; label: string | null }>,
   compact: boolean,
 ) {
   const graph = new dagre.graphlib.Graph();
   graph.setGraph({
     rankdir: "TB",
     nodesep: compact ? 16 : 24,
-    ranksep: compact ? 28 : 40,
+    // 단계 간격은 엣지 라벨이 들어갈 자리다. 라벨이 도착 노드 경계에 붙어 보이지 않도록
+    // 두 줄짜리 라벨 높이(30)보다 넉넉하게 둔다.
+    ranksep: compact ? 48 : 68,
   });
   graph.setDefaultEdgeLabel(() => ({}));
   const sizes = new Map(
-    nodes.map((node) => [node.id, { width: NODE_WIDTH, height: nodeHeight(node.labelLines.length) }]),
+    nodes.map((node) => [
+      node.id,
+      { width: nodeWidth(node.shape), height: nodeHeight(node.labelLines.length) },
+    ]),
   );
   if (root != null) {
     graph.setNode(root.id, { width: ROOT_WIDTH, height: ROOT_HEIGHT });
@@ -155,23 +172,23 @@ function layoutGraph(
     canvasHeight = Math.max(canvasHeight, box.top + box.height + PAD);
   }
   const paths: EdgePath[] = [];
-  const addPath = (key: string, from: string, to: string) => {
-    const label = graph.edge(from, to) as { points?: Array<{ x: number; y: number }> } | undefined;
-    const points = (label?.points ?? []).map((point) => ({ x: point.x + PAD, y: point.y + PAD }));
+  const addPath = (key: string, from: string, to: string, dashed: boolean, label: string | null) => {
+    const edge = graph.edge(from, to) as { points?: Array<{ x: number; y: number }> } | undefined;
+    const points = (edge?.points ?? []).map((point) => ({ x: point.x + PAD, y: point.y + PAD }));
     if (points.length < 2) {
       return;
     }
     const segments = segmentsFromPoints(key, points);
     if (segments.length > 0) {
-      paths.push({ key, from, to, segments });
+      paths.push({ key, from, to, segments, dashed, label });
     }
   };
   for (const edge of edges) {
-    addPath(`${edge.from}-${edge.to}`, edge.from, edge.to);
+    addPath(`${edge.from}-${edge.to}`, edge.from, edge.to, edge.dashed, edge.label);
   }
   if (root != null) {
     for (const id of entryIds) {
-      addPath(`root-${id}`, root.id, id);
+      addPath(`root-${id}`, root.id, id, false, null);
     }
   }
   const segments = paths.flatMap((path) => path.segments);
@@ -223,18 +240,33 @@ export function OrchestrationGraphPanel({
   const cameraValue = useRef({ x: 0, y: 0 });
   const baseCamera = useRef({ x: 0, y: 0 });
   const cameraBounds = useRef({ minX: 0, maxX: 0, minY: 0, maxY: 0 });
-  const [viewport, setViewport] = useState({ width: 0, height: 0 });
+  const didPan = useRef(false);
+  const [viewport, setViewport] = useState({ left: 0, top: 0, width: 0, height: 0 });
+  const [panelSize, setPanelSize] = useState({ width: 0, height: 0 });
+  const [hoverLabel, setHoverLabel] = useState<LabelHover | null>(null);
+  const [tooltipHeight, setTooltipHeight] = useState(TOOLTIP_ESTIMATED_HEIGHT);
   const panResponder = useMemo(
     () =>
       PanResponder.create({
+        onStartShouldSetPanResponderCapture: () => {
+          didPan.current = false;
+          return false;
+        },
         onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dx) + Math.abs(gesture.dy) > 2,
+        onMoveShouldSetPanResponder: (_event, gesture) =>
+          Math.abs(gesture.dx) + Math.abs(gesture.dy) > PAN_MOVE_THRESHOLD,
         onPanResponderTerminationRequest: () => false,
         onShouldBlockNativeResponder: () => false,
         onPanResponderGrant: () => {
+          didPan.current = false;
           baseCamera.current = { ...cameraValue.current };
+          // 캔버스가 움직이면 툴팁이 붙어 있던 자리가 어긋난다. 팬이 시작되면 숨긴다.
+          setHoverLabel(null);
         },
         onPanResponderMove: (_event, gesture) => {
+          if (Math.abs(gesture.dx) + Math.abs(gesture.dy) > PAN_MOVE_THRESHOLD) {
+            didPan.current = true;
+          }
           const limit = cameraBounds.current;
           const next = {
             x: clamp(baseCamera.current.x + gesture.dx, limit.minX, limit.maxX),
@@ -305,6 +337,7 @@ export function OrchestrationGraphPanel({
   }, [paseo, putSnapshot, graphName, workspaceId]);
   useEffect(() => {
     setFileView(null);
+    setHoverLabel(null);
     cameraValue.current = { x: 0, y: 0 };
     camera.setValue({ x: 0, y: 0 });
     if (graphName == null || directory == null) {
@@ -342,15 +375,19 @@ export function OrchestrationGraphPanel({
     () => (source == null ? null : applyLiveGraph(source, snapshots)),
     [source, snapshots],
   );
-  const graphRootAgentId = view?.root?.id ?? null;
+  // 노드 누름은 루트 판정에 기대지 않는다. 표의 부모가 하나로 모이지 않는 그래프(예: 부모가
+  // 표 밖에 있는 행이 하나 섞인 확인용 그래프)에서는 루트가 null이 되는데, 그때 루트로 막으면
+  // agentId가 있는 노드까지 전부 disabled가 되어 누름이 죽는다. agentId 없는 노드는
+  // GraphCanvas 쪽에서 이미 눌리지 않으므로, 막을 것은 아직 시작하지 않은 그래프뿐이다.
+  const nodePressEnabled = view != null && !view.waiting;
   const handleNodePress = useCallback(
     (pressedAgentId: string) => {
-      if (graphRootAgentId == null) {
+      if (didPan.current) {
         return;
       }
       navigation?.openAgent({ agentId: pressedAgentId });
     },
-    [navigation, graphRootAgentId],
+    [navigation],
   );
   const tapIds = useMemo(() => {
     const ids: string[] = [];
@@ -420,9 +457,44 @@ export function OrchestrationGraphPanel({
         overflow: "hidden" as const,
       },
       graphViewport: { flex: 1, overflow: "hidden" as const },
+      tooltip: {
+        width: TOOLTIP_WIDTH,
+        paddingHorizontal: 8,
+        paddingVertical: 6,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: theme.colors.foregroundMuted,
+        backgroundColor: theme.colors.surface2,
+        // 그림자는 배열 형식으로만 전처리를 통과한다. 문자열은 단위 없는 CSS가 되어 선언째 버려진다.
+        // 앞은 아래로 지는 그림자, 뒤는 테두리를 따라 번지는 회색 글로우다. 글로우가 배경과 상자를 갈라
+        // 상자 안 글자가 어디까지인지 읽힌다.
+        boxShadow: [
+          { offsetX: 0, offsetY: 2, blurRadius: 8, color: theme.colors.border },
+          { offsetX: 0, offsetY: 0, blurRadius: 6, color: theme.colors.foregroundMuted },
+        ],
+      },
+      tooltipCaption: { color: theme.colors.foregroundMuted, fontSize: 9, lineHeight: 12 },
+      tooltipText: { color: theme.colors.foreground, fontSize: 11, lineHeight: 15 },
     }),
     [theme, layout.compact],
   );
+  // 툴팁은 그래프 뷰포트(overflow hidden) 바깥인 패널 최상위에 그린다. 뷰포트 안에 두면 가장자리
+  // 라벨의 툴팁이 잘리고, zIndex로는 피할 수 없다. 노드 카드(zIndex 3)보다도 위에 온다.
+  const tooltipBox =
+    hoverLabel == null || viewport.width === 0
+      ? null
+      : {
+          left: clamp(
+            viewport.left + cameraValue.current.x + hoverLabel.left + hoverLabel.width / 2 - TOOLTIP_WIDTH / 2,
+            TOOLTIP_MARGIN,
+            Math.max(TOOLTIP_MARGIN, panelSize.width - TOOLTIP_WIDTH - TOOLTIP_MARGIN),
+          ),
+          top: clamp(
+            viewport.top + cameraValue.current.y + hoverLabel.top + hoverLabel.height + 6,
+            TOOLTIP_MARGIN,
+            Math.max(TOOLTIP_MARGIN, panelSize.height - tooltipHeight - TOOLTIP_MARGIN),
+          ),
+        };
   if (found.isSuccess && graphNames.length === 0) {
     return (
       <View style={styles.screen}>
@@ -434,7 +506,13 @@ export function OrchestrationGraphPanel({
   }
 
   return (
-    <View style={styles.screen}>
+    <View
+      style={styles.screen}
+      onLayout={(event) => {
+        const { width, height } = event.nativeEvent.layout;
+        setPanelSize((prev) => (prev.width === width && prev.height === height ? prev : { width, height }));
+      }}
+    >
       <View style={styles.content}>
         {graphNames.length > 1 && graphName != null ? (
           <SettingsSelect
@@ -462,9 +540,12 @@ export function OrchestrationGraphPanel({
         <View
           style={styles.graphViewport}
           onLayout={(event) => {
-            const { width, height } = event.nativeEvent.layout;
+            // left·top은 패널 최상위 기준 좌표다. 툴팁을 패널에 띄울 때 캔버스 좌표에 더한다.
+            const { x, y, width, height } = event.nativeEvent.layout;
             setViewport((prev) =>
-              prev.width === width && prev.height === height ? prev : { width, height },
+              prev.left === x && prev.top === y && prev.width === width && prev.height === height
+                ? prev
+                : { left: x, top: y, width, height },
             );
           }}
         >
@@ -484,9 +565,23 @@ export function OrchestrationGraphPanel({
               view={view}
               placed={placed}
               colors={theme.colors}
-              onNodePress={graphRootAgentId == null ? undefined : handleNodePress}
+              onNodePress={nodePressEnabled ? handleNodePress : undefined}
+              onLabelHover={setHoverLabel}
             />
           </Animated.View>
+        </View>
+      ) : null}
+      {tooltipBox != null ? (
+        <View
+          pointerEvents="none"
+          onLayout={(event) => {
+            const { height } = event.nativeEvent.layout;
+            setTooltipHeight((prev) => (prev === height ? prev : height));
+          }}
+          style={[styles.tooltip, { position: "absolute", left: tooltipBox.left, top: tooltipBox.top, zIndex: 30 }]}
+        >
+          <Text style={styles.tooltipCaption}>전체 문구</Text>
+          <Text style={styles.tooltipText}>{hoverLabel?.text}</Text>
         </View>
       ) : null}
     </View>

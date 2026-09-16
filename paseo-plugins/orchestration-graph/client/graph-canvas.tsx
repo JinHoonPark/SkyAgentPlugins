@@ -1,13 +1,13 @@
 import { Icon } from "@getpaseo/plugin/client/react-native";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Pressable, Text, View } from "react-native";
-import type { GraphView } from "../shared/graphs";
+import { Animated, Pressable, Text, View, type ViewStyle } from "react-native";
+import type { GraphNodeShape, GraphView } from "../shared/graphs";
 import { registerStop } from "./cleanup";
 import {
   BADGE_HEIGHT,
   EXIT_FADE_MS,
-  FLOW_DOT,
   FLOW_PERIOD_MS,
+  GATE_ARM_WIDTH,
   INTRO_FADE_MS,
   INTRO_STAGGER_MS,
   LAYOUT_MOVE_MS,
@@ -31,6 +31,8 @@ import {
   type NodeStatus,
   type PlacedGraph,
 } from "./motion-logic";
+// SPIKE-N1
+import { hexTriplet, spikeVariant, useSpikeLoop } from "./spike-n1";
 
 type NodePos = {
   tx: Animated.Value;
@@ -53,6 +55,8 @@ type SegPos = {
   topN: number;
   widthN: number;
   degN: number;
+  /** 지금까지 이 조각이 가졌던 최대 길이. 점선 조각을 미리 만들어 두는 상한이다. */
+  peak: number;
   exiting: boolean;
 };
 
@@ -62,6 +66,7 @@ type Ghost = {
   status: NodeStatus | null;
   name: string;
   labelLines: string[];
+  shape: GraphNodeShape;
   width: number;
   height: number;
   pos: NodePos;
@@ -79,6 +84,7 @@ type NodeBoxProps = {
   status: NodeStatus | null;
   name: string;
   labelLines: string[];
+  shape: GraphNodeShape;
   width: number;
   height: number;
   pos: NodePos;
@@ -86,6 +92,21 @@ type NodeBoxProps = {
   agentId: string | null;
   onPress?: (agentId: string) => void;
 };
+
+/**
+ * 화살촉의 가로·세로 크기. 꼭짓점은 상자의 오른쪽 중앙이라, 상자의 왼쪽 변에서 오른쪽으로
+ * HEAD_WIDTH만큼 떨어진 자리에 온다.
+ */
+const HEAD_WIDTH = 9;
+const HEAD_HEIGHT = 8;
+/** 엣지 라벨 한 줄의 최대 폭과 최대 줄 수. 노드 카드(260)보다 좁게 잡아 카드를 덮지 않는다. */
+const LABEL_MAX_WIDTH = 160;
+const LABEL_MAX_LINES = 2;
+const LABEL_PAD_X = 3;
+const LABEL_PAD_Y = 1;
+/** 점선 엣지의 조각 길이와 간격. */
+const DASH_LENGTH = 8;
+const DASH_GAP = 6;
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -137,6 +158,7 @@ function ensureSegPos(map: Map<string, SegPos>, segment: EdgeSegment, hidden: bo
     topN: segment.top,
     widthN: segment.width,
     degN: segment.deg,
+    peak: segment.width,
     exiting: false,
   };
   map.set(segment.key, created);
@@ -194,6 +216,7 @@ const NodeBoxView = memo(
     status,
     name,
     labelLines,
+    shape,
     width,
     height,
     pos,
@@ -263,6 +286,99 @@ const NodeBoxView = memo(
         : toBar;
     const badgeColor = toBar;
 
+    // SPIKE-N1 — variants are selected by the node's profile text so a fixture file alone picks them.
+    const variant = spikeVariant(name);
+    const loopActive = variant != null;
+    const spike = useSpikeLoop(loopActive, false);
+    const spin = useSpikeLoop(variant === "3a" || variant === "3b", true);
+    const accentRgb = hexTriplet(colors.accent);
+    const shadowHex = hexTriplet("#000000");
+    const spikeShadow = spike.interpolate({
+      inputRange: [0, 1],
+      outputRange: [
+        `0 2 8 0 rgba(${shadowHex}, 0.15), 0 0 4 0 rgba(${accentRgb}, 0.20)`,
+        `0 2 8 0 rgba(${shadowHex}, 0.15), 0 0 24 6 rgba(${accentRgb}, 0.95)`,
+      ],
+    });
+    const spikeBorder = spike.interpolate({
+      inputRange: [0, 1],
+      outputRange: [colors.border, colors.accent],
+    });
+    const spikeBar = spike.interpolate({
+      inputRange: [0, 1],
+      outputRange: [colors.foregroundMuted, colors.accent],
+    });
+    const [listenerShadow, setListenerShadow] = useState<string | null>(null);
+    useEffect(() => {
+      if (variant !== "1d") {
+        setListenerShadow(null);
+        return;
+      }
+      const id = spike.addListener(({ value }) => {
+        setListenerShadow(
+          `0 2 8 0 rgba(${shadowHex}, 0.15), 0 0 ${(4 + value * 20).toFixed(1)} ${(value * 6).toFixed(1)} rgba(${accentRgb}, ${(0.2 + value * 0.75).toFixed(2)})`,
+        );
+      });
+      return () => spike.removeListener(id);
+    }, [variant, spike, shadowHex, accentRgb]);
+
+    if (shape === "hexagon") {
+      // 게이트 카드는 정지해 있다 — 테두리·글로우·왼쪽 막대가 없고 상태 줄도 그리지 않는다.
+      return (
+        <AnimatedPressable
+          disabled={!press}
+          onPress={press ? () => onPress(agentId) : undefined}
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            width,
+            height,
+            zIndex: 3,
+            opacity: pos.opacity,
+            transform: [{ translateX: pos.tx }, { translateY: pos.ty }, { scale }],
+          }}
+        >
+          <View style={{ flexDirection: "row", width, height }}>
+            <GateArm side="left" height={height} colors={colors} />
+            <View
+              style={{
+                width: width - GATE_ARM_WIDTH * 2,
+                height,
+                backgroundColor: colors.surface2,
+                borderColor: colors.border,
+                borderWidth: 1,
+                alignItems: "center",
+                justifyContent: "center",
+                paddingHorizontal: 10,
+              }}
+            >
+              {labelLines.map((line, lineIndex) => {
+                const primary = lineIndex === 0;
+                return (
+                  <Text
+                    key={lineIndex}
+                    selectable={false}
+                    style={{
+                      color: primary ? colors.foreground : colors.foregroundMuted,
+                      textAlign: "center",
+                      fontSize: primary ? 13 : 11,
+                      ...(primary ? { fontWeight: "600" as const } : {}),
+                      lineHeight: LINE_HEIGHT,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {line}
+                  </Text>
+                );
+              })}
+            </View>
+            <GateArm side="right" height={height} colors={colors} />
+          </View>
+        </AnimatedPressable>
+      );
+    }
+
     return (
       <AnimatedPressable
         disabled={!press}
@@ -278,18 +394,54 @@ const NodeBoxView = memo(
           transform: [{ translateX: pos.tx }, { translateY: pos.ty }, { scale }],
         }}
       >
+        {variant === "1bt" || variant === "1bc" ? (
+          // SPIKE-N1 — Exp1(나): glow-only sibling behind the card; only its opacity loops.
+          <Animated.View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              right: 0,
+              bottom: 0,
+              borderRadius: NODE_RADIUS,
+              backgroundColor: variant === "1bc" ? colors.surface2 : "transparent",
+              opacity: spike.interpolate({ inputRange: [0, 1], outputRange: [0.15, 1] }),
+              boxShadow: `0 0 4 0 rgba(${accentRgb}, 0.6), 0 0 20 6 rgba(${accentRgb}, 0.9)`,
+            }}
+          />
+        ) : null}
         <Animated.View
           style={{
             flex: 1,
-            backgroundColor,
-            borderColor,
+            backgroundColor: variant === "1bt" ? "transparent" : backgroundColor,
+            borderColor: variant === "2a" ? spikeBorder : borderColor,
             borderWidth,
             borderRadius: NODE_RADIUS,
             borderStyle: range.to.dashed ? "dashed" : "solid",
-            boxShadow: range.to.boxShadow,
+            boxShadow:
+              variant === "1a" ? spikeShadow : variant === "1d" ? (listenerShadow ?? range.to.boxShadow) : range.to.boxShadow,
             overflow: "visible",
           }}
         >
+          {variant === "2b" ? (
+            // SPIKE-N1 — Exp2(나): border-only overlay on top of the card, opacity loop only.
+            <Animated.View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                left: 0,
+                top: 0,
+                right: 0,
+                bottom: 0,
+                borderRadius: NODE_RADIUS,
+                borderWidth: 2,
+                borderColor: colors.accent,
+                opacity: spike.interpolate({ inputRange: [0, 1], outputRange: [0.2, 1] }),
+                zIndex: 4,
+              }}
+            />
+          ) : null}
           {barColor != null ? (
             <Animated.View
               style={{
@@ -298,7 +450,7 @@ const NodeBoxView = memo(
                 top: 0,
                 bottom: 0,
                 width: STATUS_BAR_WIDTH,
-                backgroundColor: barColor,
+                backgroundColor: variant === "2a" ? spikeBar : barColor,
                 borderTopLeftRadius: NODE_RADIUS,
                 borderBottomLeftRadius: NODE_RADIUS,
               }}
@@ -316,7 +468,28 @@ const NodeBoxView = memo(
                 gap: 4,
               }}
             >
-              <Icon name={STATUS_ICON[status]} size={12} color={badgeColor} />
+              {variant === "3a" || variant === "3b" || variant === "3c" ? (
+                // SPIKE-N1 — Exp3: host Icon has no style/ref, so it is wrapped in a fixed 12x12 box.
+                // The red tint is the diagnostic background that shows where the glyph sits.
+                <Animated.View
+                  style={{
+                    width: 12,
+                    height: 12,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: "rgba(255,0,0,0.4)",
+                    ...(variant === "3a" ? { transformOrigin: "6px 6px" } : {}),
+                    transform:
+                      variant === "3c"
+                        ? []
+                        : [{ rotate: spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] }) }],
+                  }}
+                >
+                  <Icon name={STATUS_ICON[status]} size={12} color={badgeColor} />
+                </Animated.View>
+              ) : (
+                <Icon name={STATUS_ICON[status]} size={12} color={badgeColor} />
+              )}
               <Text
                 selectable={false}
                 style={{ color: badgeColor, fontSize: 11, lineHeight: 14 }}
@@ -377,6 +550,7 @@ const NodeBoxView = memo(
     prev.mode === next.mode &&
     prev.status === next.status &&
     prev.name === next.name &&
+    prev.shape === next.shape &&
     prev.width === next.width &&
     prev.height === next.height &&
     prev.pos === next.pos &&
@@ -386,14 +560,99 @@ const NodeBoxView = memo(
     sameLines(prev.labelLines, next.labelLines),
 );
 
+/**
+ * 육각형 게이트의 좌우 삼각형 날개.
+ * 보이지 않아야 할 두 변은 캔버스 배경색으로 칠한다(투명 색 문자열을 쓰지 않기 위함).
+ * 왼쪽 날개는 꼭짓점이 왼쪽, 오른쪽 날개는 꼭짓점이 오른쪽이다.
+ */
+function GateArm({
+  side,
+  height,
+  colors,
+}: {
+  side: "left" | "right";
+  height: number;
+  colors: GraphThemeColors;
+}) {
+  const half = height / 2;
+  const style: ViewStyle =
+    side === "left"
+      ? {
+          width: 0,
+          height: 0,
+          borderTopWidth: half,
+          borderBottomWidth: half,
+          borderTopColor: colors.surface1,
+          borderBottomColor: colors.surface1,
+          borderRightWidth: GATE_ARM_WIDTH,
+          borderRightColor: colors.surface2,
+        }
+      : {
+          width: 0,
+          height: 0,
+          borderTopWidth: half,
+          borderBottomWidth: half,
+          borderTopColor: colors.surface1,
+          borderBottomColor: colors.surface1,
+          borderLeftWidth: GATE_ARM_WIDTH,
+          borderLeftColor: colors.surface2,
+        };
+  return <View style={style} />;
+}
+
+/** 점선 엣지의 조각들. 길이 상한까지 미리 만들고, 넘치는 조각은 선 상자가 잘라 낸다. */
+function dashPieces(peak: number, thickness: number, color: string) {
+  const pieces = [];
+  for (let left = 0; left < peak; left += DASH_LENGTH + DASH_GAP) {
+    pieces.push(
+      <View
+        key={String(left)}
+        style={{
+          position: "absolute",
+          left,
+          top: 0,
+          width: DASH_LENGTH,
+          height: thickness,
+          backgroundColor: color,
+        }}
+      />,
+    );
+  }
+  return pieces;
+}
+
+/**
+ * 화살촉 하나. 테두리 삼각형이고 꼭짓점은 상자의 오른쪽 중앙이다.
+ * 보이지 않아야 할 두 변은 캔버스 배경색으로 칠한다(투명 색 문자열을 쓰지 않기 위함).
+ * 도착 지점의 고정 화살촉과 실행 중 선을 흐르는 화살표가 이 모양을 함께 쓴다.
+ */
+function arrowHeadStyle(colors: GraphThemeColors) {
+  return {
+    width: 0,
+    height: 0,
+    borderLeftWidth: HEAD_WIDTH,
+    borderTopWidth: HEAD_HEIGHT / 2,
+    borderBottomWidth: HEAD_HEIGHT / 2,
+    borderLeftColor: colors.accent,
+    borderTopColor: colors.surface1,
+    borderBottomColor: colors.surface1,
+  } as const;
+}
+
 function EdgeSegmentView({
   color,
   pos,
   thickness,
+  dashed,
+  head,
+  colors,
 }: {
   color: string;
   pos: SegPos;
   thickness: number;
+  dashed: boolean;
+  head: boolean;
+  colors: GraphThemeColors;
 }) {
   const rotate = pos.deg.interpolate({
     inputRange: [-360, 360],
@@ -401,19 +660,143 @@ function EdgeSegmentView({
   });
   return (
     <Animated.View
+      // 장식이라 터치를 받지 않는다. 이 상자는 폭이 수백 px인 회전 상자여서, 터치를 받으면
+      // 그 아래 노드 카드의 누름을 가로챈다.
+      pointerEvents="none"
       style={{
         position: "absolute",
         left: pos.left,
         top: pos.top,
         width: pos.width,
         height: thickness,
-        backgroundColor: color,
         opacity: pos.opacity,
         transform: [{ rotate }],
         transformOrigin: "0 50%",
         zIndex: 1,
       }}
-    />
+    >
+      <Animated.View
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          width: pos.width,
+          height: thickness,
+          backgroundColor: dashed ? undefined : color,
+          overflow: dashed ? "hidden" : "visible",
+        }}
+      >
+        {dashed ? dashPieces(pos.peak, thickness, color) : null}
+      </Animated.View>
+      {head ? (
+        // 꼭짓점이 선의 끝, 즉 도착 노드 경계에 닿는다. 회전은 선 상자가 이미 하고 있으므로
+        // 조각의 세로 위치만 선 중심에 맞추면 된다. 조각의 오른쪽 끝에 붙이는 이유는 폭이
+        // Animated 값이라 `left`로는 계산할 수 없기 때문이다 — 일반 View는 Animated 값을
+        // 풀지 못해 `left`가 무효가 되고 화살촉이 조각 시작점, 즉 엣지가 꺾이는 자리에 선다.
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            right: 0,
+            top: thickness / 2 - HEAD_HEIGHT / 2,
+            width: HEAD_WIDTH,
+            height: HEAD_HEIGHT,
+          }}
+        >
+          <View style={arrowHeadStyle(colors)} />
+        </View>
+      ) : null}
+    </Animated.View>
+  );
+}
+
+/** 잘린 엣지 라벨의 전체 문구를 띄우는 데 필요한 값. 좌표는 캔버스 기준이고, 화면 좌표로 옮기는
+ * 일은 그래프 뷰포트 바깥에 툴팁을 그리는 패널이 맡는다. */
+export type LabelHover = {
+  text: string;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
+/** 선 위에 놓이는 라벨. 선과 형제인 절대 좌표라 기울지 않고, 폭을 실측해 중심을 선 중점에 맞춘다. */
+function EdgeLabelView({
+  text,
+  x,
+  y,
+  colors,
+  onHover,
+}: {
+  text: string;
+  x: number;
+  y: number;
+  colors: GraphThemeColors;
+  onHover?: (hover: LabelHover | null) => void;
+}) {
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  const [shownHeight, setShownHeight] = useState(0);
+  const [fullHeight, setFullHeight] = useState(0);
+  const left = x - size.width / 2;
+  const top = y - size.height / 2;
+  // 자르지 않은 사본은 같은 폭으로 접히므로, 줄 수가 늘어난 것이 곧 `…`로 잘렸다는 뜻이다.
+  // 문구가 전부 보이는 라벨에는 툴팁이 뜨지 않는다.
+  const truncated = fullHeight > shownHeight + 0.5;
+  const textStyle = { color: colors.foregroundMuted, fontSize: 11, lineHeight: 14 } as const;
+  return (
+    <Pressable
+      // 호버만 받는다. 누름 처리자를 두지 않아 라벨 위에서도 캔버스 드래그 팬이 이어진다.
+      onHoverIn={() => {
+        if (truncated) {
+          onHover?.({ text, left, top, width: size.width, height: size.height });
+        }
+      }}
+      onHoverOut={() => onHover?.(null)}
+      // 실측한 폭으로 가운데를 맞추므로 줄 수가 늘어도 중심은 선 중점에 그대로 남는다.
+      onLayout={(event) => {
+        const { width, height } = event.nativeEvent.layout;
+        setSize((prev) => (prev.width === width && prev.height === height ? prev : { width, height }));
+      }}
+      style={{
+        position: "absolute",
+        left,
+        top,
+        maxWidth: LABEL_MAX_WIDTH,
+        paddingHorizontal: LABEL_PAD_X,
+        paddingVertical: LABEL_PAD_Y,
+        backgroundColor: colors.surface1,
+        zIndex: 1,
+      }}
+    >
+      <View
+        // 잘림 판정용 사본. 줄 수 제한만 빼고 폭을 같게 두어 접히는 자리를 맞춘다.
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          width: LABEL_MAX_WIDTH - LABEL_PAD_X * 2,
+          opacity: 0,
+        }}
+      >
+        <Text
+          selectable={false}
+          style={textStyle}
+          onLayout={(event) => setFullHeight(event.nativeEvent.layout.height)}
+        >
+          {text}
+        </Text>
+      </View>
+      <Text
+        selectable={false}
+        numberOfLines={LABEL_MAX_LINES}
+        ellipsizeMode="tail"
+        style={textStyle}
+        onLayout={(event) => setShownHeight(event.nativeEvent.layout.height)}
+      >
+        {text}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -422,11 +805,13 @@ export function GraphCanvas({
   placed,
   colors,
   onNodePress,
+  onLabelHover,
 }: {
   view: GraphView;
   placed: PlacedGraph;
   colors: GraphThemeColors;
   onNodePress?: (agentId: string) => void;
+  onLabelHover?: (hover: LabelHover | null) => void;
 }) {
   const nodePos = useRef(new Map<string, NodePos>());
   const segPos = useRef(new Map<string, SegPos>());
@@ -452,7 +837,7 @@ export function GraphCanvas({
   const incoming = incomingPaths(placed.paths, runningSet);
   const incomingRef = useRef(incoming);
   incomingRef.current = incoming;
-  const flowDots = useRef(new Map<string, { x: Animated.Value; y: Animated.Value }>());
+  const flowMarkers = useRef(new Map<string, { x: Animated.Value; y: Animated.Value; deg: Animated.Value }>());
   const pendingStops = useRef(new Set<() => void>());
   const nodeExitStops = useRef(new Map<string, () => void>());
   const segExitStops = useRef(new Map<string, () => void>());
@@ -482,11 +867,12 @@ export function GraphCanvas({
   }
   if (hasRunning) {
     for (const path of incoming) {
-      if (!flowDots.current.has(path.key)) {
-        const start = pointAlongSegments(path.segments, 0) ?? { x: 0, y: 0 };
-        flowDots.current.set(path.key, {
-          x: new Animated.Value(start.x - FLOW_DOT / 2),
-          y: new Animated.Value(start.y - FLOW_DOT / 2),
+      if (!flowMarkers.current.has(path.key)) {
+        const start = pointAlongSegments(path.segments, 0) ?? { x: 0, y: 0, deg: 0 };
+        flowMarkers.current.set(path.key, {
+          x: new Animated.Value(start.x - HEAD_WIDTH / 2),
+          y: new Animated.Value(start.y - HEAD_HEIGHT / 2),
+          deg: new Animated.Value(start.deg),
         });
       }
     }
@@ -629,6 +1015,7 @@ export function GraphCanvas({
         status: wasRoot ? (previousView.root?.status ?? null) : (node?.status ?? null),
         name: wasRoot ? (previousView.root?.name ?? id) : (node?.displayName ?? id),
         labelLines: node?.labelLines ?? [],
+        shape: node?.shape ?? "rect",
         width: pos.width,
         height: pos.height,
         pos,
@@ -750,6 +1137,7 @@ export function GraphCanvas({
         pos.topN = segment.top;
         pos.widthN = segment.width;
         pos.degN = segment.deg;
+        pos.peak = Math.max(pos.peak, segment.width);
         trackAnimation(
           pendingStops.current,
           Animated.parallel([
@@ -839,12 +1227,13 @@ export function GraphCanvas({
       const t = (now % FLOW_PERIOD_MS) / FLOW_PERIOD_MS;
       for (const path of incomingRef.current) {
         const point = pointAlongSegments(path.segments, t);
-        const dot = flowDots.current.get(path.key);
-        if (point == null || dot == null) {
+        const marker = flowMarkers.current.get(path.key);
+        if (point == null || marker == null) {
           continue;
         }
-        dot.x.setValue(point.x - FLOW_DOT / 2);
-        dot.y.setValue(point.y - FLOW_DOT / 2);
+        marker.x.setValue(point.x - HEAD_WIDTH / 2);
+        marker.y.setValue(point.y - HEAD_HEIGHT / 2);
+        marker.deg.setValue(point.deg);
       }
       rafId = requestAnimationFrame(tick);
     };
@@ -864,9 +1253,10 @@ export function GraphCanvas({
 
   return (
     <View style={{ width: placed.canvasWidth, height: placed.canvasHeight }}>
-      <Animated.View style={{ opacity: edgesOpacity }}>
+      {/* 엣지 조각과 흐르는 화살표는 각자 터치를 막는다. 이 층은 라벨만 호버를 받도록 열어 둔다. */}
+      <Animated.View pointerEvents="box-none" style={{ opacity: edgesOpacity }}>
         {placed.paths.flatMap((path) =>
-          path.segments.map((segment) => {
+          path.segments.map((segment, segmentIndex) => {
             if (ghostSegKeys.has(segment.key)) {
               return null;
             }
@@ -878,26 +1268,53 @@ export function GraphCanvas({
             return (
               <EdgeSegmentView
                 key={segment.key}
-                color={runningIncoming ? colors.accent : colors.border}
+                color={runningIncoming ? colors.accent : colors.foregroundMuted}
                 thickness={runningIncoming ? 2 : 1}
+                dashed={path.dashed}
+                // 실행 중 엣지는 선을 따라 흐르는 화살표가 방향을 보여 주므로 도착 지점의
+                // 고정 화살촉을 겹쳐 그리지 않는다.
+                head={segmentIndex === path.segments.length - 1 && !runningIncoming}
+                colors={colors}
                 pos={pos}
               />
             );
           }),
         )}
+        {placed.paths.map((path) => {
+          if (path.label == null) {
+            return null;
+          }
+          const mid = pointAlongSegments(path.segments, 0.5);
+          if (mid == null) {
+            return null;
+          }
+          return (
+            <EdgeLabelView
+              key={`label-${path.key}`}
+              text={path.label}
+              x={mid.x}
+              y={mid.y}
+              colors={colors}
+              onHover={onLabelHover}
+            />
+          );
+        })}
         {segGhosts.map((ghost) => (
           <EdgeSegmentView
             key={`ghost-${ghost.key}`}
             color={colors.border}
             thickness={1}
+            dashed={false}
+            head={false}
+            colors={colors}
             pos={ghost.pos}
           />
         ))}
       </Animated.View>
       {hasRunning
         ? incoming.map((path) => {
-            const dot = flowDots.current.get(path.key);
-            if (dot == null) {
+            const marker = flowMarkers.current.get(path.key);
+            if (marker == null) {
               return null;
             }
             return (
@@ -908,14 +1325,23 @@ export function GraphCanvas({
                   position: "absolute",
                   left: 0,
                   top: 0,
-                  width: FLOW_DOT,
-                  height: FLOW_DOT,
-                  borderRadius: FLOW_DOT / 2,
-                  backgroundColor: colors.accent,
+                  width: HEAD_WIDTH,
+                  height: HEAD_HEIGHT,
                   zIndex: 2,
-                  transform: [{ translateX: dot.x }, { translateY: dot.y }],
+                  transform: [
+                    { translateX: marker.x },
+                    { translateY: marker.y },
+                    {
+                      rotate: marker.deg.interpolate({
+                        inputRange: [-360, 360],
+                        outputRange: ["-360deg", "360deg"],
+                      }),
+                    },
+                  ],
                 }}
-              />
+              >
+                <View style={arrowHeadStyle(colors)} />
+              </Animated.View>
             );
           })
         : null}
@@ -925,6 +1351,7 @@ export function GraphCanvas({
           status={view.root.status}
           name={view.root.name}
           labelLines={[]}
+          shape="rect"
           width={placed.rootBox.width}
           height={placed.rootBox.height}
           pos={nodePos.current.get(view.root.id)!}
@@ -946,6 +1373,7 @@ export function GraphCanvas({
             status={node.status}
             name={node.displayName}
             labelLines={node.labelLines}
+            shape={node.shape}
             width={box.width}
             height={box.height}
             pos={pos}
@@ -962,6 +1390,7 @@ export function GraphCanvas({
           status={ghost.status}
           name={ghost.name}
           labelLines={ghost.labelLines}
+          shape={ghost.shape}
           width={ghost.width}
           height={ghost.height}
           pos={ghost.pos}

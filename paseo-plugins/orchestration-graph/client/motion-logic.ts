@@ -10,6 +10,8 @@ export type EdgePath = {
   from: string;
   to: string;
   segments: EdgeSegment[];
+  dashed: boolean;
+  label: string | null;
 };
 
 export type PlacedGraph = {
@@ -30,6 +32,8 @@ export const LINE_HEIGHT = 16;
 export const BADGE_HEIGHT = 22;
 export const NODE_RADIUS = 12;
 export const STATUS_BAR_WIDTH = 3;
+/** 육각형 게이트 카드의 좌우 삼각형 폭. 카드 상자를 이만큼 넓혀 배치한다. */
+export const GATE_ARM_WIDTH = 17;
 
 export const NODE_SHADOW = { offsetX: 0, offsetY: 2, blurRadius: 8, color: "#00000026" } as const;
 
@@ -54,7 +58,6 @@ export const INTRO_FADE_MS = 200;
 export const EXIT_FADE_MS = 280;
 export const PULSE_MS = 700;
 export const FLOW_PERIOD_MS = 1600;
-export const FLOW_DOT = 8;
 
 function statusPaint(status: NodeStatus, colors: GraphThemeColors): string {
   switch (status) {
@@ -73,7 +76,9 @@ export function statusVisual(status: NodeStatus | null | undefined, colors: Grap
   if (status == null) {
     return {
       backgroundColor: colors.surface1,
-      borderColor: colors.border,
+      // 대기 노드의 테두리는 연결선 색을 쓴다. surface1·surface2 위에서 border보다 대비가 커서
+      // 다크 모드에서도 카드 윤곽이 남는다.
+      borderColor: colors.foregroundMuted,
       borderWidth: 1,
       scale: 1,
       dashed: true,
@@ -83,9 +88,10 @@ export function statusVisual(status: NodeStatus | null | undefined, colors: Grap
   }
   const paint = statusPaint(status, colors);
   const running = status === "실행 중";
+  const waiting = status === "대기";
   return {
     backgroundColor: colors.surface2,
-    borderColor: running ? colors.accent : colors.border,
+    borderColor: waiting ? colors.foregroundMuted : running ? colors.accent : colors.border,
     borderWidth: running ? 2 : 1,
     scale: STATUS_SCALE[status],
     dashed: false,
@@ -136,10 +142,11 @@ export function incomingPaths<T extends { to: string }>(paths: readonly T[], run
   return paths.filter((path) => runningIds.has(path.to));
 }
 
+/** 선 위의 한 점. `deg`는 그 점이 놓인 조각의 방향이라, 그 자리에서 선이 향하는 쪽을 알려 준다. */
 export function pointAlongSegments(
   segments: ReadonlyArray<{ left: number; top: number; width: number; deg: number }>,
   t01: number,
-): { x: number; y: number } | null {
+): { x: number; y: number; deg: number } | null {
   if (segments.length === 0) {
     return null;
   }
@@ -149,7 +156,7 @@ export function pointAlongSegments(
   }
   if (total < 1) {
     const first = segments[0];
-    return { x: first.left, y: first.top + 1 };
+    return { x: first.left, y: first.top + 1, deg: first.deg };
   }
   const wrapped = t01 - Math.floor(t01);
   let dist = wrapped * total;
@@ -161,6 +168,7 @@ export function pointAlongSegments(
       return {
         x: segment.left + Math.cos(rad) * along,
         y: segment.top + 1 + Math.sin(rad) * along,
+        deg: segment.deg,
       };
     }
     dist -= span;
@@ -170,6 +178,7 @@ export function pointAlongSegments(
   return {
     x: last.left + Math.cos(rad) * last.width,
     y: last.top + 1 + Math.sin(rad) * last.width,
+    deg: last.deg,
   };
 }
 

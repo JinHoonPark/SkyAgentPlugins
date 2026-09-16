@@ -11,6 +11,7 @@ import {
   resolveRoot,
   synthesizeStatus,
   type GraphAgentSnapshot,
+  type GraphNodeShape,
 } from "../shared/graphs";
 
 const REQUIRED_COLUMNS = ["노드 ID", "프로필", "상태", "agentId"] as const;
@@ -27,8 +28,10 @@ export type ParseGraphTableResult =
   | { ok: false; missingColumns: string[] };
 
 export type ParsedMermaid = {
-  edges: Array<{ from: string; to: string }>;
+  edges: Array<{ from: string; to: string; dashed: boolean; label: string | null }>;
   labels: Record<string, string[]>;
+  /** 모양을 표기한 노드만 담는다. 표기가 없는 노드는 rect다. */
+  shapes: Record<string, GraphNodeShape>;
   nodeIds: string[];
 };
 
@@ -150,13 +153,14 @@ export function parseGraphTable(markdown: string): ParseGraphTableResult {
 export function parseMermaid(markdown: string): ParsedMermaid {
   const body = extractMermaidBody(markdown);
   if (body == null) {
-    return { edges: [], labels: {}, nodeIds: [] };
+    return { edges: [], labels: {}, shapes: {}, nodeIds: [] };
   }
 
   const labels: Record<string, string[]> = {};
+  const shapes: Record<string, GraphNodeShape> = {};
   const nodeIds: string[] = [];
   const seenNodes = new Set<string>();
-  const edges: Array<{ from: string; to: string }> = [];
+  const edges: Array<{ from: string; to: string; dashed: boolean; label: string | null }> = [];
   const seenEdges = new Set<string>();
 
   const addNode = (id: string) => {
@@ -175,6 +179,9 @@ export function parseMermaid(markdown: string): ParsedMermaid {
         if (labels[token.id] == null) {
           labels[token.id] = token.label.split("<br/>");
         }
+      }
+      if (token != null && token.kind === "node" && token.shape === "hexagon") {
+        shapes[token.id] = "hexagon";
       }
 
       const from = tokens[i];
@@ -195,24 +202,27 @@ export function parseMermaid(markdown: string): ParsedMermaid {
       const key = from.id + "\0" + to.id;
       if (!seenEdges.has(key)) {
         seenEdges.add(key);
-        edges.push({ from: from.id, to: to.id });
+        edges.push({ from: from.id, to: to.id, dashed: arrow.dashed, label: arrow.label });
       }
     }
   }
 
-  return { edges, labels, nodeIds };
+  return { edges, labels, shapes, nodeIds };
 }
 
-type MermaidToken = { kind: "node"; id: string; label: string | null } | { kind: "arrow" };
+type MermaidToken =
+  | { kind: "node"; id: string; label: string | null; shape: GraphNodeShape }
+  | { kind: "arrow"; dashed: boolean; label: string | null };
 
 const NODE_ID_RE = /[A-Za-z][A-Za-z0-9_]*/y;
 // Mermaid의 엣지 연산자. 라벨을 포함한 표기가 앞에 와야 `-->` 같은 짧은 표기가 먼저 먹지 않는다.
-const ARROW_PATTERNS: RegExp[] = [
-  /-->\s*\|[^|]*\|/, // -->|라벨|
-  /-\.->/, // -.->
-  /-\.\s*(?:"(?:[^"\\]|\\.)*"|.*?)\s*\.->/, // -. 라벨 .->
-  /-->/, // -->
-  /--\s*(?:"(?:[^"\\]|\\.)*"|.*?)\s*-->/, // -- 라벨 -->
+// 라벨 표기가 있는 셋은 라벨 자리를 캡처 그룹으로 갖고, `-.->`·`-->`는 라벨이 없다.
+const ARROW_PATTERNS: ReadonlyArray<{ pattern: RegExp; dashed: boolean }> = [
+  { pattern: /-->\s*\|([^|]*)\|/, dashed: false }, // -->|라벨|
+  { pattern: /-\.->/, dashed: true }, // -.->
+  { pattern: /-\.\s*("(?:[^"\\]|\\.)*"|.*?)\s*\.->/, dashed: true }, // -. 라벨 .->
+  { pattern: /-->/, dashed: false }, // -->
+  { pattern: /--\s*("(?:[^"\\]|\\.)*"|.*?)\s*-->/, dashed: false }, // -- 라벨 -->
 ];
 
 function tokenizeMermaidLine(line: string): MermaidToken[] {
@@ -230,15 +240,15 @@ function tokenizeMermaidLine(line: string): MermaidToken[] {
 
     const node = readMermaidNode(line, index);
     if (node != null) {
-      tokens.push({ kind: "node", id: node.id, label: node.label });
+      tokens.push({ kind: "node", id: node.id, label: node.label, shape: node.shape });
       index = node.end;
       continue;
     }
 
-    const arrowEnd = readMermaidArrow(line, index);
-    if (arrowEnd != null) {
-      tokens.push({ kind: "arrow" });
-      index = arrowEnd;
+    const arrow = readMermaidArrow(line, index);
+    if (arrow != null) {
+      tokens.push({ kind: "arrow", dashed: arrow.dashed, label: arrow.label });
+      index = arrow.end;
       continue;
     }
 
@@ -257,12 +267,14 @@ function readMermaidNode(line: string, start: number) {
   const id = match[0];
   let index = start + id.length;
   let label: string | null = null;
+  let shape: GraphNodeShape = "rect";
 
   if (line.startsWith("{{", index)) {
     const body = readShapeBody(line, index + 2, "}}");
     if (body != null) {
       label = body.value;
       index = body.end;
+      shape = "hexagon";
     }
   } else if (line[index] === "[") {
     const body = readShapeBody(line, index + 1, "]");
@@ -272,7 +284,7 @@ function readMermaidNode(line: string, start: number) {
     }
   }
 
-  return { id, label, end: index };
+  return { id, label, shape, end: index };
 }
 
 function readShapeBody(line: string, start: number, close: string) {
@@ -311,14 +323,25 @@ function readQuoted(line: string, start: number) {
 }
 
 function readMermaidArrow(line: string, start: number) {
-  for (const pattern of ARROW_PATTERNS) {
+  for (const { pattern, dashed } of ARROW_PATTERNS) {
     pattern.lastIndex = start;
     const match = pattern.exec(line);
     if (match != null && match.index === start) {
-      return start + match[0].length;
+      return { end: start + match[0].length, dashed, label: readArrowLabel(match[1]) };
     }
   }
   return null;
+}
+
+/** 엣지 표기에서 캡처한 라벨 자리. 따옴표로 감싼 표기는 따옴표를 벗기고, 빈 자리는 라벨 없음으로 본다. */
+function readArrowLabel(raw: string | undefined) {
+  if (raw == null) {
+    return null;
+  }
+  const text = raw.trim();
+  const unquoted =
+    text.length >= 2 && text.startsWith('"') && text.endsWith('"') ? text.slice(1, -1).trim() : text;
+  return unquoted.length === 0 ? null : unquoted;
 }
 
 export function assembleGraph(
@@ -348,6 +371,7 @@ export function assembleGraph(
       status: synthesizeStatus(row.agentId, row.tableStatus, snapshot),
       fromTable: true,
       labelLines: mermaidLines && mermaidLines.length > 0 ? mermaidLines : [row.profile],
+      shape: mermaid.shapes[row.id] ?? "rect",
     });
     seen.add(row.id);
   }
@@ -367,6 +391,7 @@ export function assembleGraph(
       status: null,
       fromTable: false,
       labelLines,
+      shape: mermaid.shapes[id] ?? "rect",
     });
     seen.add(id);
   }

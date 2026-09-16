@@ -12,6 +12,9 @@ export const findGraphByAgentRpc = defineRpc({
 
 export const graphNodeStatus = z.enum(["대기", "실행 중", "완료", "실패"]);
 
+/** Mermaid 노드 표기에서 읽은 모양. `ID["..."]`는 rect, `ID{{"..."}}`는 hexagon이다. */
+export const graphNodeShape = z.enum(["rect", "hexagon"]);
+
 const graphRpcInput = z.object({
   directory: z.string(),
   name: z.string(),
@@ -37,12 +40,15 @@ const graphViewOutput = z.object({
       status: graphNodeStatus.nullable(),
       fromTable: z.boolean(),
       labelLines: z.array(z.string()),
+      shape: graphNodeShape,
     }),
   ),
   edges: z.array(
     z.object({
       from: z.string(),
       to: z.string(),
+      dashed: z.boolean(),
+      label: z.string().nullable(),
     }),
   ),
 });
@@ -62,23 +68,25 @@ export const readGraphFileRpc = defineRpc({
 export const PARENT_AGENT_ID_LABEL = "paseo.parent-agent-id";
 
 export type GraphNodeStatus = z.infer<typeof graphNodeStatus>;
+export type GraphNodeShape = z.infer<typeof graphNodeShape>;
 export type GraphView = RpcOutput<typeof getGraphRpc>;
 
 export function graphFileEquals(left: GraphView | null, right: GraphView) {
   return left != null && JSON.stringify(left) === JSON.stringify(right);
 }
 
+/** 배치와 선 그리기의 입력. 이 값이 그대로면 `layoutGraph`를 다시 돌리지 않고 앞 결과를 그대로 그린다. */
 export function layoutSignature(
   rootId: string | null,
-  nodes: Array<{ id: string; labelLines: string[] }>,
-  edges: Array<{ from: string; to: string }>,
+  nodes: Array<{ id: string; labelLines: string[]; shape: GraphNodeShape }>,
+  edges: Array<{ from: string; to: string; dashed: boolean; label: string | null }>,
   compact: boolean,
 ) {
   return JSON.stringify({
     compact,
     rootId,
-    nodes: nodes.map((node) => [node.id, node.labelLines.length]),
-    edges: edges.map((edge) => [edge.from, edge.to]),
+    nodes: nodes.map((node) => [node.id, node.labelLines.length, node.shape]),
+    edges: edges.map((edge) => [edge.from, edge.to, edge.label, edge.dashed]),
   });
 }
 
