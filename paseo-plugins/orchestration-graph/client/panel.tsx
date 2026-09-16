@@ -1,6 +1,7 @@
 import dagre from "@dagrejs/dagre";
 import type { PluginAgentPanelProps } from "@getpaseo/plugin/client";
 import { useAgent, usePaseo, useRpc, useWorkspace } from "@getpaseo/plugin/client";
+import { SettingsSelect } from "@getpaseo/plugin/client/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, PanResponder, Text, View } from "react-native";
@@ -34,25 +35,27 @@ const NODE_WIDTH = 260;
 const PAD = 16;
 const FILE_POLL_MS = 2000;
 const PAN_KEEP_PX = 64;
+const NO_GRAPH_NAMES: string[] = [];
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
+function axisBounds(contentSize: number, viewportSize: number) {
+  const keep = Math.min(contentSize, viewportSize, PAN_KEEP_PX);
+  return { min: keep - contentSize, max: viewportSize - keep };
+}
+
+// Bounds for the camera translate, in viewport pixels, over the raw canvas.
 function panBounds(
   canvasWidth: number,
   canvasHeight: number,
   viewportWidth: number,
   viewportHeight: number,
 ) {
-  const keepX = Math.min(canvasWidth, viewportWidth, PAN_KEEP_PX);
-  const keepY = Math.min(canvasHeight, viewportHeight, PAN_KEEP_PX);
-  return {
-    minX: keepX - canvasWidth,
-    maxX: viewportWidth - keepX,
-    minY: keepY - canvasHeight,
-    maxY: viewportHeight - keepY,
-  };
+  const x = axisBounds(canvasWidth, viewportWidth);
+  const y = axisBounds(canvasHeight, viewportHeight);
+  return { minX: x.min, maxX: x.max, minY: y.min, maxY: y.max };
 }
 
 function segmentMetrics(ax: number, ay: number, bx: number, by: number): EdgeSegment | null {
@@ -263,12 +266,20 @@ export function OrchestrationGraphPanel({
       return next;
     });
   }, []);
+  const [pickedName, setPickedName] = useState<string | null>(null);
   const found = useQuery({
     queryKey: [findGraphByAgentRpc.name, directory, agentId],
     queryFn: () => findGraphByAgent({ directory: directory!, agentId }),
     enabled: directory != null,
+    // Polled like the file it feeds: a graph that appears while the panel is open has to show up in
+    // the picker without closing and reopening it.
+    refetchInterval: FILE_POLL_MS,
   });
-  const graphName = found.data?.name ?? null;
+  const graphNames = found.data?.names ?? NO_GRAPH_NAMES;
+  // A pick sticks while its graph is still listed; without one the newest graph is shown, which is
+  // what the panel showed before the picker existed. A newer graph must not override a pick.
+  const graphName =
+    pickedName != null && graphNames.includes(pickedName) ? pickedName : (graphNames[0] ?? null);
   const graph = useQuery({
     queryKey: [getGraphRpc.name, directory, graphName],
     queryFn: () => getGraph({ directory: directory!, name: graphName! }),
@@ -412,7 +423,7 @@ export function OrchestrationGraphPanel({
     }),
     [theme, layout.compact],
   );
-  if (found.isSuccess && found.data.name == null) {
+  if (found.isSuccess && graphNames.length === 0) {
     return (
       <View style={styles.screen}>
         <View style={styles.content}>
@@ -425,7 +436,16 @@ export function OrchestrationGraphPanel({
   return (
     <View style={styles.screen}>
       <View style={styles.content}>
-        <Text style={styles.title}>{graphName}</Text>
+        {graphNames.length > 1 && graphName != null ? (
+          <SettingsSelect
+            label="그래프"
+            value={graphName}
+            options={graphNames.map((name) => ({ label: name, value: name }))}
+            onValueChange={setPickedName}
+          />
+        ) : (
+          <Text style={styles.title}>{graphName}</Text>
+        )}
         {tapIds.map((id) => (
           <AgentSnapshotTap key={id} agentId={id} onSnapshot={putSnapshot} />
         ))}

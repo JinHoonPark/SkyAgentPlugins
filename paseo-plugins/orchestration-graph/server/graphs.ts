@@ -38,15 +38,14 @@ export async function findGraphByAgent(
   { directory, agentId }: RpcInput<typeof findGraphByAgentRpc>,
   context: PluginHandlerContext,
 ) {
-  const names = listGraphNames(directory);
+  const graphNames = listGraphNames(directory);
   const listed = await context.paseo.agents.list();
   const agents = new Map<string, ListedAgent>();
   for (const entry of listed.entries) {
     agents.set(entry.agent.id, entry.agent);
   }
-  let matchedName: string | null = null;
-  let matchedMtime = Number.NEGATIVE_INFINITY;
-  for (const name of names) {
+  const matched: Array<{ name: string; mtime: number }> = [];
+  for (const name of graphNames) {
     const loaded = loadParsedGraph(directory, name);
     const inTable = loaded.rows.some((row) => row.agentId === agentId);
     const isParent = loaded.rows.some((row) => {
@@ -60,13 +59,11 @@ export async function findGraphByAgent(
       continue;
     }
     const graphFile = join(resolve(directory), ".skywork", "paseo-orchestration", name, "GRAPH.md");
-    const mtime = statSync(graphFile).mtimeMs;
-    if (mtime > matchedMtime) {
-      matchedMtime = mtime;
-      matchedName = name;
-    }
+    matched.push({ name, mtime: statSync(graphFile).mtimeMs });
   }
-  return { name: matchedName };
+  // sort is stable, so equal mtimes keep the readdir order the single-pick loop used to keep.
+  matched.sort((left, right) => right.mtime - left.mtime);
+  return { names: matched.map((entry) => entry.name) };
 }
 
 function listGraphNames(directory: string) {

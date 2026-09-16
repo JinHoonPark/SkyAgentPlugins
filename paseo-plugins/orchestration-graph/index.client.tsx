@@ -17,8 +17,9 @@ export default function contribute(client: PluginClientContext) {
       const directory = workspace?.workspaceDirectory ?? null;
       if (directory != null) {
         const found = await client.rpc(findGraphByAgentRpc, { directory, agentId });
-        if (found.name != null) {
-          const view = await client.rpc(getGraphRpc, { directory, name: found.name });
+        const newest = found.names[0] ?? null;
+        if (newest != null) {
+          const view = await client.rpc(getGraphRpc, { directory, name: newest });
           rootAgentId = view.root?.id ?? null;
         }
       }

@@ -6,7 +6,8 @@ export const GRAPH_WAITING_LABEL = "작업 대기중" as const;
 export const findGraphByAgentRpc = defineRpc({
   name: "graphs.find-by-agent",
   input: z.object({ directory: z.string(), agentId: z.string() }),
-  output: z.object({ name: z.string().nullable() }),
+  // Newest first, so the first entry is the graph the panel shows before the user picks one.
+  output: z.object({ names: z.array(z.string()) }),
 });
 
 export const graphNodeStatus = z.enum(["대기", "실행 중", "완료", "실패"]);
