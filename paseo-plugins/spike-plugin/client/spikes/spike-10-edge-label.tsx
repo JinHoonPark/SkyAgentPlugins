@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Block, SpikeScreen, rotateOf } from "./kit";
-import type { SpikeScreenProps } from "./types";
+import type { SpikeGuide, SpikeScreenProps } from "./types";
 
 const PANEL_WIDTH = 300;
 const PANEL_HEIGHT = 150;
 const CARD_WIDTH = 30;
 const CARD_HEIGHT = 20;
+/** 축소 상태를 보는 배율. 스파이크 8과 같은 0.5배를 쓴다. */
+const SHRINK = 0.5;
 
 interface Case {
   readonly label: string;
@@ -32,6 +34,23 @@ const LENGTHS: readonly Case[] = [
 
 const NAMES = ["승인", "승인 대기", "승인 대기 중입니다"] as const;
 
+/** 축소 상태에서 볼 사례. 글자 수 세 가지와 비스듬한 각도 하나. */
+const SHRUNK_CASES: ReadonlyArray<{ readonly label: string; readonly geom: Case; readonly text: string }> = [
+  { label: "0도 · 두 자", geom: LENGTHS[0], text: NAMES[0] },
+  { label: "0도 · 다섯 자", geom: LENGTHS[1], text: NAMES[1] },
+  { label: "0도 · 열 자", geom: LENGTHS[2], text: NAMES[2] },
+  { label: "45도 · 열 자", geom: ANGLES[1], text: NAMES[2] },
+];
+
+const GUIDE: SpikeGuide = {
+  question:
+    "라벨을 선의 자식으로 두면 글자가 선과 함께 기울고, 선과 형제인 절대 좌표로 선 중점에 놓으면 수평을 유지하는가. 폭을 모르는 상태에서 라벨 중심을 선 중점에 맞출 수 있고, 선·다른 라벨·카드와 겹치지 않는가.",
+  how:
+    "네 각도 블록의 점은 선의 정확한 중점이다. 점에 나안 라벨의 중심이 맞는지, 네 각도 모두 글자가 수평인지 본다(같은 줄에 가안 기울임 라벨이 겹쳐 있다). 글자 수 세 가지 블록에서 중심 정렬을, 배경 판 블록의 켜기/끄기 버튼으로 선이 글자를 관통하는지와 위쪽 블록의 배경 판 변화를, 겹침 블록에서 짧은 엣지와 라벨 둘이 붙는 교차 구간을 본다. 축소 상태 블록에서 같은 장면을 0.5배로 줄여 글자가 여전히 읽히는지 본다.",
+  pass:
+    "통과 — 나안에서 네 각도 모두 글자가 수평이고, 세 글자 수 모두 라벨 중심이 선 중점에 맞으며, 배경 판을 깔면 선이 글자를 관통하지 않고 축소 상태에서도 글자가 읽힌다. 중단 — 가안은 글자가 선과 같이 기울면 더 조정하지 않고 버린다. 중앙 정렬이 안 되면 선 중점에서 한쪽으로 띄워 왼쪽 정렬하는 쪽으로 후퇴하고, 짧은 엣지에서 라벨이 카드 글자를 가리면 불성립이다. 배경 판으로도 읽히지 않거나 겹침을 피할 수 없으면 짧은 엣지에서는 라벨을 숨기고, 그래도 읽히지 않으면 라벨을 선 밖 다른 자리에 표시할지를 스펙 소유자에게 올린다.",
+};
+
 /**
  * 스파이크 10 — 읽기 쉬운 엣지 라벨 배치.
  * 가안은 라벨을 회전한 선 View의 자식으로, 나안은 선과 형제인 절대 좌표 View로 선 중점에 놓는다.
@@ -47,8 +66,13 @@ export function Spike10EdgeLabel(props: SpikeScreenProps) {
       {...props}
       title="스파이크 10 — 엣지 라벨 배치"
       hint="점은 선의 정확한 중점입니다. 나안 라벨의 중심이 그 점에 맞는지, 네 각도에서 글자가 수평인지 보세요."
+      guide={GUIDE}
     >
-      <Block {...props} title="네 각도 — 가안(선의 자식)과 나안(형제 절대 좌표)">
+      <Block
+        {...props}
+        title="네 각도 — 가안(선의 자식)과 나안(형제 절대 좌표)"
+        note="가안 — 라벨을 회전한 선 View의 자식으로 넣어 글자가 선과 함께 기울고, 나안 — 선과 형제인 절대 좌표 View를 선 중점에 놓아 글자를 수평으로 둔다."
+      >
         {ANGLES.map((entry, index) => (
           <View key={entry.label} style={{ gap: 4 }}>
             <Text style={{ color: colors.foregroundMuted, fontSize: layout.compact ? 10 : 11 }}>{entry.label}</Text>
@@ -117,6 +141,35 @@ export function Spike10EdgeLabel(props: SpikeScreenProps) {
           <Text style={{ color: colors.foregroundMuted, fontSize: layout.compact ? 10 : 11 }}>라벨 둘이 가까이 붙는 교차 구간</Text>
           <CrossCanvas theme={theme} plate={plate} />
         </View>
+      </Block>
+
+      <Block
+        {...props}
+        title="축소 상태 — 라벨 읽힘"
+        note="같은 장면을 0.5배로 줄여 놓았습니다. 축소한 상태에서도 라벨 글자가 읽히는지, 선이나 카드에 묻히지 않는지 봅니다."
+      >
+        {SHRUNK_CASES.map((entry) => (
+          <View key={entry.label} style={{ gap: 4 }}>
+            <Text style={{ color: colors.foregroundMuted, fontSize: layout.compact ? 10 : 11 }}>{entry.label}</Text>
+            <View
+              style={{
+                width: PANEL_WIDTH * SHRINK,
+                height: PANEL_HEIGHT * SHRINK,
+                transform: [{ scale: SHRINK }],
+                transformOrigin: "0 0",
+              }}
+            >
+              <LabelCase
+                theme={theme}
+                entry={entry.geom}
+                text={entry.text}
+                plate={plate}
+                showTilted={false}
+                marker={false}
+              />
+            </View>
+          </View>
+        ))}
       </Block>
     </SpikeScreen>
   );

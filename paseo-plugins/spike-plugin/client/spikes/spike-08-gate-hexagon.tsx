@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Text, View } from "react-native";
 import { Block, Segment, SpikeScreen } from "./kit";
-import type { SpikeScreenProps } from "./types";
+import type { SpikeGuide, SpikeScreenProps } from "./types";
 
 const APOTHEM = 24;
 const HEX_HEIGHT = APOTHEM * 2;
@@ -11,6 +11,15 @@ const FLAT_TRIANGLE_WIDTH = 17;
 const ROTATED_RECT_WIDTH = (4 * APOTHEM) / Math.sqrt(3);
 const ROTATED_BOX = 58;
 const NAMES = ["게이트", "승인 게이트", "검토가 필요한 아주 긴 이름"] as const;
+
+const GUIDE: SpikeGuide = {
+  question:
+    "가안(직사각형 + 좌우 삼각형)과 나안(직사각형 세 장을 0·60·120도로 겹침) 중 하나로 육각형이 만들어지는가. 테두리가 바깥 윤곽에만 남고, 긴 이름도 도형 안에 들어가며, 축소해도 사각형 노드와 구분되는가.",
+  how:
+    "가안·나안 블록을 나란히 놓고 이음매와 도형 안쪽을 가로지르는 선을 본다. 이름 길이 세 가지 블록에서 긴 이름의 잘림을, 축소 상태 블록에서 오른쪽 사각형 카드와의 모양 차이를, 선 연결 블록에서 선 끝이 도형 안으로 들어가는지 본다.",
+  pass:
+    "통과 — 두 방안 중 하나가 이음매 없이 보이고 테두리가 바깥 윤곽에만 남으며, 세 이름 모두 안에 들어가고 축소 상태에서도 사각형과 구분된다. 중단 — 텍스트를 못 넣으면 육각형을 작은 표식으로 줄여 카드 옆에 붙이는 쪽으로, 테두리를 못 두르면 배경색과 모양만으로 구분하는 쪽으로 후퇴한다. 두 방안 모두 육각형 자체가 불성립이면 모양 구분을 포기하고 색·아이콘으로 게이트를 표시하는 방안을 스펙 소유자에게 올린다.",
+};
 
 /**
  * 스파이크 8 — SVG 없는 사용자 게이트 육각형과 텍스트.
@@ -26,8 +35,13 @@ export function Spike08GateHexagon(props: SpikeScreenProps) {
       {...props}
       title="스파이크 8 — 사용자 게이트 육각형과 텍스트"
       hint="가안은 가운데 직사각형 좌우에 삼각형을 붙인 조합이고, 나안은 같은 직사각형 세 장을 0도·60도·120도로 겹친 조합입니다. 삼각형의 바깥 두 변은 배경색으로 칠했습니다(투명 색 문자열을 쓰지 않기 위함)."
+      guide={GUIDE}
     >
-      <Block {...props} title="가안 — 직사각형 + 좌우 삼각형">
+      <Block
+        {...props}
+        title="가안 — 직사각형 + 좌우 삼각형"
+        note="가안 — 가운데 직사각형 한 장의 좌우에, 바깥 두 변을 배경색으로 칠한 삼각형을 붙여 육각형 실루엣을 만든다."
+      >
         <View style={{ flexDirection: "row", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <HexFlat theme={theme} name={NAMES[1]} outline={false} />
           <HexFlat theme={theme} name={NAMES[1]} outline />
@@ -37,7 +51,11 @@ export function Spike08GateHexagon(props: SpikeScreenProps) {
         </Text>
       </Block>
 
-      <Block {...props} title="나안 — 회전한 직사각형 세 장">
+      <Block
+        {...props}
+        title="나안 — 회전한 직사각형 세 장"
+        note="나안 — 같은 크기의 직사각형 세 장을 0도·60도·120도로 겹쳐 만든 육각형. 겹친 조각 경계에 배경색이 비치는 이음매가 남는지가 관건이다."
+      >
         <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
           <HexRotated theme={theme} name={NAMES[1]} outline={false} />
           <HexRotated theme={theme} name={NAMES[1]} outline />

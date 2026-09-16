@@ -1,7 +1,7 @@
 import { ScrollView } from "@getpaseo/plugin/client/react-native";
 import type { ReactNode } from "react";
 import { Text, View } from "react-native";
-import type { SpikeScreenProps } from "./types";
+import type { SpikeGuide, SpikeScreenProps } from "./types";
 
 export interface SegmentProps {
   readonly x1: number;
@@ -48,11 +48,12 @@ export function rotateOf(x1: number, y1: number, x2: number, y2: number) {
 interface SpikeScreenShellProps extends SpikeScreenProps {
   readonly title: string;
   readonly hint: string;
+  readonly guide: SpikeGuide;
   readonly children: ReactNode;
 }
 
-/** 모든 판정 화면의 공통 틀. 제목·안내문만 두고 판정 문구는 넣지 않는다. */
-export function SpikeScreen({ theme, layout, title, hint, children }: SpikeScreenShellProps) {
+/** 모든 판정 화면의 공통 틀. 제목·안내문·판정 안내만 두고 판정 문구는 넣지 않는다. */
+export function SpikeScreen({ theme, layout, title, hint, guide, children }: SpikeScreenShellProps) {
   return (
     <ScrollView contentContainerStyle={{ padding: layout.compact ? 12 : 16, gap: 14 }}>
       <Text style={{ color: theme.colors.foreground, fontSize: layout.compact ? 15 : 17, fontWeight: "600" }}>
@@ -61,23 +62,77 @@ export function SpikeScreen({ theme, layout, title, hint, children }: SpikeScree
       <Text style={{ color: theme.colors.foregroundMuted, fontSize: layout.compact ? 11 : 12, lineHeight: 16 }}>
         {hint}
       </Text>
+      <Guide theme={theme} layout={layout} guide={guide} />
       {children}
     </ScrollView>
   );
 }
 
+/** 판정 안내 세 줄. 무엇을 확인하고, 어떻게 보고, 무엇이면 통과인지만 적는다. */
+function Guide({ theme, layout, guide }: SpikeScreenProps & { readonly guide: SpikeGuide }) {
+  const lines = [
+    { label: "무엇을 확인하는가", text: guide.question },
+    { label: "어떻게 보는가", text: guide.how },
+    { label: "무엇이면 통과인가", text: guide.pass },
+  ];
+  return (
+    <View
+      style={{
+        gap: 8,
+        padding: layout.compact ? 10 : 12,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        backgroundColor: theme.colors.surface1,
+        borderRadius: 8,
+      }}
+    >
+      {lines.map((line) => (
+        <View key={line.label} style={{ gap: 2 }}>
+          <Text style={{ color: theme.colors.foreground, fontSize: layout.compact ? 11 : 12, fontWeight: "600" }}>
+            {line.label}
+          </Text>
+          <Text
+            style={{
+              color: theme.colors.foregroundMuted,
+              fontSize: layout.compact ? 10 : 11,
+              lineHeight: layout.compact ? 14 : 15,
+            }}
+          >
+            {line.text}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 interface BlockProps extends SpikeScreenProps {
   readonly title: string;
+  /** 이 묶음이 어떤 방안인지 한 줄 설명. 방안을 나란히 놓는 묶음에만 붙인다. */
+  readonly note?: string;
   readonly children: ReactNode;
 }
 
 /** 화면 안의 비교 묶음. 제목 아래에 판정할 조각들을 담는다. */
-export function Block({ theme, layout, title, children }: BlockProps) {
+export function Block({ theme, layout, title, note, children }: BlockProps) {
   return (
     <View style={{ gap: 8 }}>
-      <Text style={{ color: theme.colors.foregroundMuted, fontSize: layout.compact ? 11 : 12, fontWeight: "600" }}>
-        {title}
-      </Text>
+      <View style={{ gap: 2 }}>
+        <Text style={{ color: theme.colors.foregroundMuted, fontSize: layout.compact ? 11 : 12, fontWeight: "600" }}>
+          {title}
+        </Text>
+        {note == null ? null : (
+          <Text
+            style={{
+              color: theme.colors.foregroundMuted,
+              fontSize: layout.compact ? 10 : 11,
+              lineHeight: layout.compact ? 14 : 15,
+            }}
+          >
+            {note}
+          </Text>
+        )}
+      </View>
       {children}
     </View>
   );

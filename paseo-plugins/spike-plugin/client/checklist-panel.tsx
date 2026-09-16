@@ -139,6 +139,17 @@ export function SpikePanel({ theme, layout, agentId }: PluginAgentPanelProps) {
         fontSize: 13,
         lineHeight: 16,
       },
+      rowNumber: {
+        minWidth: 18,
+        textAlign: "center" as const,
+        color: theme.colors.foregroundMuted,
+        fontSize: layout.compact ? 11 : 12,
+        fontWeight: "600" as const,
+      },
+      noScreen: {
+        color: theme.colors.foregroundMuted,
+        fontSize: layout.compact ? 10 : 11,
+      },
       rowLabel: {
         flex: 1,
         color: theme.colors.foreground,
@@ -200,7 +211,7 @@ export function SpikePanel({ theme, layout, agentId }: PluginAgentPanelProps) {
       </View>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.list}>
-          {SPIKE_ITEMS.map((entry) => {
+          {SPIKE_ITEMS.map((entry, index) => {
             const on = selected.includes(entry);
             const prototype = findPrototype(entry);
             return (
@@ -211,12 +222,16 @@ export function SpikePanel({ theme, layout, agentId }: PluginAgentPanelProps) {
                   onPress={() => toggle(entry)}
                   accessibilityRole="checkbox"
                 >
+                  {/* 번호는 목록 순서 그대로다. 항목이 늘거나 줄면 자동으로 따라간다. */}
+                  <Text style={styles.rowNumber}>{String(index + 1)}</Text>
                   <View style={[styles.box, on ? styles.boxOn : styles.boxOff]}>
                     {on ? <Text style={styles.check}>✓</Text> : null}
                   </View>
                   <Text style={styles.rowLabel}>{entry}</Text>
                 </Pressable>
-                {prototype == null ? null : (
+                {prototype == null ? (
+                  <Text style={styles.noScreen}>판정 화면 없음</Text>
+                ) : (
                   <Pressable
                     style={styles.viewButton}
                     onPress={() => setOpenedItem(entry)}
