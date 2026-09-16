@@ -1,0 +1,6 @@
+{
+  "id": "spike-plugin",
+  "requirements": {
+    "paseo": ">=0.8.0"
+  }
+}
