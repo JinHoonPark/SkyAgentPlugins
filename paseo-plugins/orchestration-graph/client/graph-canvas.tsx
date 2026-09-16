@@ -31,8 +31,6 @@ import {
   type NodeStatus,
   type PlacedGraph,
 } from "./motion-logic";
-// SPIKE-N1
-import { hexTriplet, spikeVariant, useSpikeLoop } from "./spike-n1";
 
 type NodePos = {
   tx: Animated.Value;
@@ -286,42 +284,6 @@ const NodeBoxView = memo(
         : toBar;
     const badgeColor = toBar;
 
-    // SPIKE-N1 — variants are selected by the node's profile text so a fixture file alone picks them.
-    const variant = spikeVariant(name);
-    const loopActive = variant != null;
-    const spike = useSpikeLoop(loopActive, false);
-    const spin = useSpikeLoop(variant === "3a" || variant === "3b", true);
-    const accentRgb = hexTriplet(colors.accent);
-    const shadowHex = hexTriplet("#000000");
-    const spikeShadow = spike.interpolate({
-      inputRange: [0, 1],
-      outputRange: [
-        `0 2 8 0 rgba(${shadowHex}, 0.15), 0 0 4 0 rgba(${accentRgb}, 0.20)`,
-        `0 2 8 0 rgba(${shadowHex}, 0.15), 0 0 24 6 rgba(${accentRgb}, 0.95)`,
-      ],
-    });
-    const spikeBorder = spike.interpolate({
-      inputRange: [0, 1],
-      outputRange: [colors.border, colors.accent],
-    });
-    const spikeBar = spike.interpolate({
-      inputRange: [0, 1],
-      outputRange: [colors.foregroundMuted, colors.accent],
-    });
-    const [listenerShadow, setListenerShadow] = useState<string | null>(null);
-    useEffect(() => {
-      if (variant !== "1d") {
-        setListenerShadow(null);
-        return;
-      }
-      const id = spike.addListener(({ value }) => {
-        setListenerShadow(
-          `0 2 8 0 rgba(${shadowHex}, 0.15), 0 0 ${(4 + value * 20).toFixed(1)} ${(value * 6).toFixed(1)} rgba(${accentRgb}, ${(0.2 + value * 0.75).toFixed(2)})`,
-        );
-      });
-      return () => spike.removeListener(id);
-    }, [variant, spike, shadowHex, accentRgb]);
-
     if (shape === "hexagon") {
       // 게이트 카드는 정지해 있다 — 테두리·글로우·왼쪽 막대가 없고 상태 줄도 그리지 않는다.
       return (
@@ -394,54 +356,18 @@ const NodeBoxView = memo(
           transform: [{ translateX: pos.tx }, { translateY: pos.ty }, { scale }],
         }}
       >
-        {variant === "1bt" || variant === "1bc" ? (
-          // SPIKE-N1 — Exp1(나): glow-only sibling behind the card; only its opacity loops.
-          <Animated.View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              left: 0,
-              top: 0,
-              right: 0,
-              bottom: 0,
-              borderRadius: NODE_RADIUS,
-              backgroundColor: variant === "1bc" ? colors.surface2 : "transparent",
-              opacity: spike.interpolate({ inputRange: [0, 1], outputRange: [0.15, 1] }),
-              boxShadow: `0 0 4 0 rgba(${accentRgb}, 0.6), 0 0 20 6 rgba(${accentRgb}, 0.9)`,
-            }}
-          />
-        ) : null}
         <Animated.View
           style={{
             flex: 1,
-            backgroundColor: variant === "1bt" ? "transparent" : backgroundColor,
-            borderColor: variant === "2a" ? spikeBorder : borderColor,
+            backgroundColor,
+            borderColor,
             borderWidth,
             borderRadius: NODE_RADIUS,
             borderStyle: range.to.dashed ? "dashed" : "solid",
-            boxShadow:
-              variant === "1a" ? spikeShadow : variant === "1d" ? (listenerShadow ?? range.to.boxShadow) : range.to.boxShadow,
+            boxShadow: range.to.boxShadow,
             overflow: "visible",
           }}
         >
-          {variant === "2b" ? (
-            // SPIKE-N1 — Exp2(나): border-only overlay on top of the card, opacity loop only.
-            <Animated.View
-              pointerEvents="none"
-              style={{
-                position: "absolute",
-                left: 0,
-                top: 0,
-                right: 0,
-                bottom: 0,
-                borderRadius: NODE_RADIUS,
-                borderWidth: 2,
-                borderColor: colors.accent,
-                opacity: spike.interpolate({ inputRange: [0, 1], outputRange: [0.2, 1] }),
-                zIndex: 4,
-              }}
-            />
-          ) : null}
           {barColor != null ? (
             <Animated.View
               style={{
@@ -450,7 +376,7 @@ const NodeBoxView = memo(
                 top: 0,
                 bottom: 0,
                 width: STATUS_BAR_WIDTH,
-                backgroundColor: variant === "2a" ? spikeBar : barColor,
+                backgroundColor: barColor,
                 borderTopLeftRadius: NODE_RADIUS,
                 borderBottomLeftRadius: NODE_RADIUS,
               }}
@@ -468,28 +394,7 @@ const NodeBoxView = memo(
                 gap: 4,
               }}
             >
-              {variant === "3a" || variant === "3b" || variant === "3c" ? (
-                // SPIKE-N1 — Exp3: host Icon has no style/ref, so it is wrapped in a fixed 12x12 box.
-                // The red tint is the diagnostic background that shows where the glyph sits.
-                <Animated.View
-                  style={{
-                    width: 12,
-                    height: 12,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: "rgba(255,0,0,0.4)",
-                    ...(variant === "3a" ? { transformOrigin: "6px 6px" } : {}),
-                    transform:
-                      variant === "3c"
-                        ? []
-                        : [{ rotate: spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] }) }],
-                  }}
-                >
-                  <Icon name={STATUS_ICON[status]} size={12} color={badgeColor} />
-                </Animated.View>
-              ) : (
-                <Icon name={STATUS_ICON[status]} size={12} color={badgeColor} />
-              )}
+              <Icon name={STATUS_ICON[status]} size={12} color={badgeColor} />
               <Text
                 selectable={false}
                 style={{ color: badgeColor, fontSize: 11, lineHeight: 14 }}
