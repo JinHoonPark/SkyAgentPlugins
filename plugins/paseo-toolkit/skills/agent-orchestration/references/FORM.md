@@ -63,10 +63,10 @@ flowchart TD
 
 | 노드 ID | 프로필 | 입력 | 결과 파일 | 합격 기준 | 워크스페이스 | 되돌리기 | 재시도 | 상태 | agentId |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| N1 | 단순 탐색 — UI 파일 수집 | 리더 브리핑 | nodes/N1.md / nodes/N1.failure.md | nodes/N1.md에 UI 변경 파일 목록이 있다 | 공유(local) | 아니오 | 가능 · 한도 1 · 사용 0 | 실행 중 | 8f2a1c4e-3b6d-4a91-9c0e-1d2b3a4c5d6e |
-| N2 | 리뷰·검증 — 변경분 검토 | nodes/N1.md | nodes/N2.md / nodes/N2.failure.md | nodes/N2.md에 검토 결과가 있다 | 공유(local) | 아니오 | 가능 · 한도 1 · 사용 0 | 대기 | |
-| N3 | 고급 명령 실행 - Codex — 빌드·테스트 | nodes/N1.md | nodes/N3.md / nodes/N3.failure.md | nodes/N3.md에 빌드·테스트 기록이 있다 | 공유(local) | 아니오 | 불가 | 대기 | |
-| N4 | 고급 명령 실행 - Claude — 커밋 | nodes/N2.md · nodes/N3.md | nodes/N4.failure.md | nodes/N4.failure.md가 없다 | 공유(local) | 예 | 불가 | 대기 | |
+| N1 | 단순 탐색 — UI 파일 수집 | 리더 브리핑 | nodes/N1.md / nodes/N1.failure.md | UI 변경 파일 목록을 실제로 수집했는지 확인한다 | 공유(local) | 아니오 | 가능 · 한도 1 · 사용 0 | 실행 중 | 8f2a1c4e-3b6d-4a91-9c0e-1d2b3a4c5d6e |
+| N2 | 리뷰·검증 — 변경분 검토 | nodes/N1.md | nodes/N2.md / nodes/N2.failure.md | 원본 수용 조건을 모두 통과했는지 확인한다 | 공유(local) | 아니오 | 가능 · 한도 1 · 사용 0 | 대기 | |
+| N3 | 고급 명령 실행 - Codex — 빌드·테스트 | nodes/N1.md | nodes/N3.md / nodes/N3.failure.md | 빌드·테스트를 실제로 실행한 결과가 있는지 확인한다 | 공유(local) | 아니오 | 불가 | 대기 | |
+| N4 | 고급 명령 실행 - Claude — 커밋 | nodes/N2.md · nodes/N3.md | nodes/N4.failure.md | 워커가 종료되었고 커밋이 실제로 만들어졌는지 확인한다 | 공유(local) | 예 | 불가 | 대기 | |
 ````
 
 스테이지 경계에서 상태를 갱신한 뒤:
@@ -74,10 +74,10 @@ flowchart TD
 ````text
 | 노드 ID | 프로필 | 입력 | 결과 파일 | 합격 기준 | 워크스페이스 | 되돌리기 | 재시도 | 상태 | agentId |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| N1 | 단순 탐색 — UI 파일 수집 | 리더 브리핑 | nodes/N1.md / nodes/N1.failure.md | nodes/N1.md에 UI 변경 파일 목록이 있다 | 공유(local) | 아니오 | 가능 · 한도 1 · 사용 0 | 완료 | 8f2a1c4e-3b6d-4a91-9c0e-1d2b3a4c5d6e |
-| N2 | 리뷰·검증 — 변경분 검토 | nodes/N1.md | nodes/N2.md / nodes/N2.failure.md | nodes/N2.md에 검토 결과가 있다 | 공유(local) | 아니오 | 가능 · 한도 1 · 사용 0 | 실행 중 | 1a9b0c2d-4e5f-6789-abcd-ef0123456789 |
-| N3 | 고급 명령 실행 - Codex — 빌드·테스트 | nodes/N1.md | nodes/N3.md / nodes/N3.failure.md | nodes/N3.md에 빌드·테스트 기록이 있다 | 공유(local) | 아니오 | 불가 | 실행 중 | 2b0c1d3e-5f60-789a-bcde-f01234567890 |
-| N4 | 고급 명령 실행 - Claude — 커밋 | nodes/N2.md · nodes/N3.md | nodes/N4.failure.md | nodes/N4.failure.md가 없다 | 공유(local) | 예 | 불가 | 대기 | |
+| N1 | 단순 탐색 — UI 파일 수집 | 리더 브리핑 | nodes/N1.md / nodes/N1.failure.md | UI 변경 파일 목록을 실제로 수집했는지 확인한다 | 공유(local) | 아니오 | 가능 · 한도 1 · 사용 0 | 완료 | 8f2a1c4e-3b6d-4a91-9c0e-1d2b3a4c5d6e |
+| N2 | 리뷰·검증 — 변경분 검토 | nodes/N1.md | nodes/N2.md / nodes/N2.failure.md | 원본 수용 조건을 모두 통과했는지 확인한다 | 공유(local) | 아니오 | 가능 · 한도 1 · 사용 0 | 실행 중 | 1a9b0c2d-4e5f-6789-abcd-ef0123456789 |
+| N3 | 고급 명령 실행 - Codex — 빌드·테스트 | nodes/N1.md | nodes/N3.md / nodes/N3.failure.md | 빌드·테스트를 실제로 실행한 결과가 있는지 확인한다 | 공유(local) | 아니오 | 불가 | 실행 중 | 2b0c1d3e-5f60-789a-bcde-f01234567890 |
+| N4 | 고급 명령 실행 - Claude — 커밋 | nodes/N2.md · nodes/N3.md | nodes/N4.failure.md | 워커가 종료되었고 커밋이 실제로 만들어졌는지 확인한다 | 공유(local) | 예 | 불가 | 대기 | |
 ````
 
 레벨 1(엣지 없는 팬아웃)은 작업 사이에 의존이 없으므로 노드 사이에 화살표를 그리지 않고 각 노드를 따로 나열한다. 아래는 활성 큐 기동을 마친 뒤의 견본이다 — 되돌리기 `예`인 N4는 기동 직전 별도 승인을 기다리므로 `대기`이고 `agentId`가 비어 있다.
@@ -98,10 +98,10 @@ flowchart TD
 
 | 노드 ID | 프로필 | 입력 | 결과 파일 | 합격 기준 | 워크스페이스 | 되돌리기 | 재시도 | 상태 | agentId |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| N1 | 단순 탐색 — 로그 오류 수집 | 리더 브리핑 | nodes/N1.md / nodes/N1.failure.md | nodes/N1.md에 오류 목록이 있다 | 공유(local) | 아니오 | 가능 · 한도 1 · 사용 0 | 실행 중 | 8f2a1c4e-3b6d-4a91-9c0e-1d2b3a4c5d6e |
-| N2 | 리뷰·검증 — 설정 파일 검토 | 리더 브리핑 | nodes/N2.md / nodes/N2.failure.md | nodes/N2.md에 검토 결과가 있다 | 공유(local) | 아니오 | 가능 · 한도 1 · 사용 0 | 실행 중 | 1a9b0c2d-4e5f-6789-abcd-ef0123456789 |
-| N3 | 고급 명령 실행 - Codex — 빌드·테스트 | 리더 브리핑 | nodes/N3.md / nodes/N3.failure.md | nodes/N3.md에 빌드·테스트 기록이 있다 | 공유(local) | 아니오 | 불가 | 실행 중 | 2b0c1d3e-5f60-789a-bcde-f01234567890 |
-| N4 | 고급 명령 실행 - Claude — 원격 브랜치 정리 | 리더 브리핑 | nodes/N4.failure.md | nodes/N4.failure.md가 없다 | 공유(local) | 예 | 불가 | 대기 | |
+| N1 | 단순 탐색 — 로그 오류 수집 | 리더 브리핑 | nodes/N1.md / nodes/N1.failure.md | 로그에서 오류 목록을 실제로 수집했는지 확인한다 | 공유(local) | 아니오 | 가능 · 한도 1 · 사용 0 | 실행 중 | 8f2a1c4e-3b6d-4a91-9c0e-1d2b3a4c5d6e |
+| N2 | 리뷰·검증 — 설정 파일 검토 | 리더 브리핑 | nodes/N2.md / nodes/N2.failure.md | 원본 수용 조건을 모두 통과했는지 확인한다 | 공유(local) | 아니오 | 가능 · 한도 1 · 사용 0 | 실행 중 | 1a9b0c2d-4e5f-6789-abcd-ef0123456789 |
+| N3 | 고급 명령 실행 - Codex — 빌드·테스트 | 리더 브리핑 | nodes/N3.md / nodes/N3.failure.md | 빌드·테스트를 실제로 실행한 결과가 있는지 확인한다 | 공유(local) | 아니오 | 불가 | 실행 중 | 2b0c1d3e-5f60-789a-bcde-f01234567890 |
+| N4 | 고급 명령 실행 - Claude — 원격 브랜치 정리 | 리더 브리핑 | nodes/N4.failure.md | 워커가 종료되었고 원격 브랜치가 실제로 정리되었는지 확인한다 | 공유(local) | 예 | 불가 | 대기 | |
 ````
 
 ## 기동 보고
@@ -150,4 +150,20 @@ flowchart TD
 모드 : 없음
 작업 : FORM.md 작성
 기록 : `.skywork/paseo-orchestration/2026-09-13-form-wording/GRAPH.md`
+```
+
+## 경로 표기 규칙
+
+화면에 경로를 낼 때는 워크스페이스 루트 기준 상대 경로를 백틱으로 감싼다 —
+`.skywork/paseo-orchestration/2026-09-15-form/GRAPH.md`. 파일명만 쓰지 않고, 마크다운 링크로
+만들지 않는다. 절대 경로는 기존 규칙이 요구할 때만 쓴다.
+
+## 사용자 확정 게이트
+
+산출물 확정을 받아야 다음 단계로 넘어갈 때 낸다. 경로는 위 `경로 표기 규칙`을 따른다.
+
+```text
+산출물 : `.skywork/paseo-orchestration/2026-09-15-form/SPEC.md`
+검토 : 통과 · 남은 라운드 1
+확정 대기 — 사용자 확정을 기다린다
 ```
