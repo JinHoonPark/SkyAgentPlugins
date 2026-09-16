@@ -13,6 +13,7 @@ export const SPIKE_ITEMS = [
   "SVG 없는 사용자 게이트 육각형과 텍스트",
   "회전된 View 기반 점선 엣지",
   "읽기 쉬운 엣지 라벨 배치",
+  "잘린 엣지 라벨의 호버 툴팁",
 ] as const;
 
 export const SPIKE_ITEM_COUNT = SPIKE_ITEMS.length;

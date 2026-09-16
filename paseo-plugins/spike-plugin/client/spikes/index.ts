@@ -3,6 +3,7 @@ import { Spike07Arrowhead } from "./spike-07-arrowhead";
 import { Spike08GateHexagon } from "./spike-08-gate-hexagon";
 import { Spike09DashedEdge } from "./spike-09-dashed-edge";
 import { Spike10EdgeLabel } from "./spike-10-edge-label";
+import { Spike11LabelTooltip } from "./spike-11-label-tooltip";
 import type { SpikePrototype } from "./types";
 
 /**
@@ -24,6 +25,11 @@ export const SPIKE_PROTOTYPES: readonly SpikePrototype[] = [
   },
   { item: "회전된 View 기반 점선 엣지", title: "스파이크 9 — 점선 엣지", Component: Spike09DashedEdge },
   { item: "읽기 쉬운 엣지 라벨 배치", title: "스파이크 10 — 엣지 라벨", Component: Spike10EdgeLabel },
+  {
+    item: "잘린 엣지 라벨의 호버 툴팁",
+    title: "스파이크 11 — 잘린 라벨 툴팁",
+    Component: Spike11LabelTooltip,
+  },
 ];
 
 export function findPrototype(item: string): SpikePrototype | undefined {
