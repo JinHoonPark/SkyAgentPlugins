@@ -36,7 +36,7 @@ export function applyLiveGraph(
     return {
       ...node,
       displayName: displayName(node.profile, node.agentId, snap),
-      status: synthesizeStatus(node.agentId, node.tableStatus, snap),
+      status: synthesizeStatus(node.tableStatus, snap),
     };
   });
   const tableNodes = nodes.filter((node) => node.fromTable);
@@ -73,7 +73,7 @@ export function applyLiveGraph(
     root: {
       id: data.root.id,
       name: displayName(data.root.id, data.root.id, rootSnap),
-      status: synthesizeStatus(data.root.id, folded, rootSnap),
+      status: synthesizeStatus(folded, rootSnap),
     },
     nodes,
   };
