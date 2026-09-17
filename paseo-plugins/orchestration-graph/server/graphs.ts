@@ -368,7 +368,7 @@ export function assembleGraph(
       tableStatus: row.tableStatus,
       agentId: row.agentId,
       displayName: displayName(row.profile, row.agentId, snapshot),
-      status: synthesizeStatus(row.agentId, row.tableStatus, snapshot),
+      status: synthesizeStatus(row.tableStatus, snapshot),
       fromTable: true,
       labelLines: mermaidLines && mermaidLines.length > 0 ? mermaidLines : [row.profile],
       shape: mermaid.shapes[row.id] ?? "rect",

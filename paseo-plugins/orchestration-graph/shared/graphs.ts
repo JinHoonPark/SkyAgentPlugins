@@ -126,13 +126,9 @@ export function displayName(
 }
 
 export function synthesizeStatus(
-  agentId: string | null,
   tableStatus: string,
   snapshot: GraphAgentSnapshot | undefined,
 ): GraphNodeStatus {
-  if (agentId == null) {
-    return "대기";
-  }
   if (snapshot == null) {
     return asDisplayStatus(tableStatus);
   }
@@ -192,7 +188,7 @@ export function resolveRoot(
   return {
     id: lead.id,
     name: displayName(lead.id, lead.id, lead),
-    status: synthesizeStatus(lead.id, tableStatus, lead),
+    status: synthesizeStatus(tableStatus, lead),
   };
 }
 
