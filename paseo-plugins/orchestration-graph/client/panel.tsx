@@ -1,4 +1,4 @@
-import dagre from "@dagrejs/dagre";
+import dagre from "./vendor/dagre";
 import type { PluginAgentPanelProps } from "@getpaseo/plugin/client";
 import { useAgent, usePaseo, useRpc, useWorkspace } from "@getpaseo/plugin/client";
 import { SettingsSelect } from "@getpaseo/plugin/client/ui";
