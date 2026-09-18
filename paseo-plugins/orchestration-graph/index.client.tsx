@@ -10,17 +10,26 @@ export default function contribute(client: PluginClientContext) {
   // panel across the pills of every agent in the same graph. A graph whose root cannot be
   // resolved falls back to the pressing agent, which may open more than one panel.
   const openGraphPanel = async (workspaceId: string, agentId: string) => {
-    let rootAgentId: string | null = null;
+    // 그래프를 찾은 뒤에는 이 id로 다시 조회해도 같은 그래프가 최초 선택으로 남을 때만 루트 id를 쓴다.
+    // 루트로 옮겨 갔더니 그 id의 목록이 비거나 다른 그래프를 고르면 요청받은 id를 그대로 유지한다.
+    // 폴백으로 고른 그래프는 요청받은 id로 계속 조회해야 한 개로 남으므로 루트로 옮기지 않는다.
+    let panelAgentId = agentId;
     try {
       const handle = client.paseo.workspaces.ref(workspaceId);
       const workspace = handle.current() ?? (await handle.refresh());
       const directory = workspace?.workspaceDirectory ?? null;
       if (directory != null) {
         const found = await client.rpc(findGraphByAgentRpc, { directory, agentId });
-        const newest = found.names[0] ?? null;
-        if (newest != null) {
-          const view = await client.rpc(getGraphRpc, { directory, name: newest });
-          rootAgentId = view.root?.id ?? null;
+        const chosen = found.items[0] ?? null;
+        if (chosen != null && !chosen.fallback) {
+          const view = await client.rpc(getGraphRpc, { directory, name: chosen.name });
+          const rootAgentId = view.root?.id ?? null;
+          if (rootAgentId != null) {
+            const reopened = await client.rpc(findGraphByAgentRpc, { directory, agentId: rootAgentId });
+            if (reopened.items[0]?.name === chosen.name) {
+              panelAgentId = rootAgentId;
+            }
+          }
         }
       }
     } catch {
@@ -28,7 +37,7 @@ export default function contribute(client: PluginClientContext) {
     }
     client.openPanel(ORCHESTRATION_GRAPH_PANEL_ID, {
       workspaceId,
-      agentId: rootAgentId ?? agentId,
+      agentId: panelAgentId,
       location: "explorer",
     });
   };

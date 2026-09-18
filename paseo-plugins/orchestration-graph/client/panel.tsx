@@ -1,19 +1,21 @@
 import dagre from "./vendor/dagre";
 import type { PluginAgentPanelProps } from "@getpaseo/plugin/client";
 import { useAgent, usePaseo, useRpc, useWorkspace } from "@getpaseo/plugin/client";
-import { SettingsSelect } from "@getpaseo/plugin/client/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, PanResponder, Text, View } from "react-native";
+import { ActivityIndicator, Animated, PanResponder, Pressable, ScrollView, Text, View } from "react-native";
 import {
   GRAPH_WAITING_LABEL,
+  GRAPH_SUMMARY_FAILED_LABEL,
   PARENT_AGENT_ID_LABEL,
   findGraphByAgentRpc,
   getGraphRpc,
   graphFileEquals,
   layoutSignature,
   readGraphFileRpc,
+  retryGraphSummaryRpc,
   type GraphAgentSnapshot,
+  type GraphListItem,
   type GraphNodeShape,
   type GraphView,
 } from "../shared/graphs";
@@ -38,7 +40,7 @@ const PAD = 16;
 const FILE_POLL_MS = 2000;
 const PAN_KEEP_PX = 64;
 const PAN_MOVE_THRESHOLD = 2;
-const NO_GRAPH_NAMES: string[] = [];
+const NO_GRAPH_ITEMS: GraphListItem[] = [];
 /** 잘린 라벨 툴팁의 폭과, 실측 전에 쓰는 높이 어림값. */
 const TOOLTIP_WIDTH = 220;
 const TOOLTIP_ESTIMATED_HEIGHT = 34;
@@ -225,6 +227,106 @@ function AgentSnapshotTap({
   return null;
 }
 
+function GraphListRow({
+  item,
+  theme,
+  compact,
+  height,
+  selected = false,
+  expanded,
+  retrying,
+  onSelect,
+  onRetry,
+}: {
+  item: GraphListItem;
+  theme: PluginAgentPanelProps["theme"];
+  compact: boolean;
+  height?: number;
+  selected?: boolean;
+  expanded?: boolean;
+  retrying: boolean;
+  onSelect?: () => void;
+  onRetry: () => void;
+}) {
+  const baseHeight = compact ? 84 : 96;
+  const scale = height == null ? 1 : Math.min(1, height / baseHeight);
+  const muted = { color: theme.colors.foregroundMuted, fontSize: 12 * scale, lineHeight: 18 * scale };
+  return (
+    <View
+      style={{
+        width: "100%",
+        height: height ?? baseHeight,
+        justifyContent: "center",
+        gap: 4 * scale,
+        paddingHorizontal: 8 * scale,
+        paddingVertical: 6 * scale,
+        borderLeftWidth: 3,
+        borderLeftColor: selected ? theme.colors.foreground : theme.colors.border,
+        backgroundColor: selected ? theme.colors.surface2 : theme.colors.surface1,
+      }}
+    >
+      <Pressable
+        disabled={onSelect == null}
+        onPress={onSelect}
+        accessibilityRole={onSelect == null ? undefined : "button"}
+        accessibilityLabel={item.name}
+        accessibilityState={{ selected, ...(expanded == null ? {} : { expanded }) }}
+        style={{ minWidth: 0, flexDirection: "row", alignItems: "center" }}
+      >
+        <Text
+          numberOfLines={2}
+          ellipsizeMode="tail"
+          style={{
+            color: theme.colors.foreground,
+            fontSize: (compact ? 18 : 22) * scale,
+            lineHeight: (compact ? 24 : 28) * scale,
+            fontWeight: "700",
+            textAlign: "left",
+            flex: 1,
+          }}
+        >
+          {item.name}
+        </Text>
+        {expanded != null ? (
+          <Text style={{ color: theme.colors.foregroundMuted, paddingLeft: 8 }}>{expanded ? "▴" : "▾"}</Text>
+        ) : null}
+      </Pressable>
+      <View style={{ paddingLeft: 8 * scale, flexDirection: "row", alignItems: "center" }}>
+        <Pressable
+          disabled={onSelect == null}
+          onPress={onSelect}
+          accessibilityRole={onSelect == null ? undefined : "button"}
+          accessibilityLabel={item.name}
+          style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 6 * scale }}
+        >
+          {item.summaryPhase === "generating" ? (
+            <ActivityIndicator size="small" color={theme.colors.foregroundMuted} />
+          ) : null}
+          <Text numberOfLines={1} ellipsizeMode="tail" style={[muted, { flex: 1 }]}>
+            {item.summaryPhase === "generating"
+              ? "요약 중..."
+              : item.summaryPhase === "failed"
+                ? GRAPH_SUMMARY_FAILED_LABEL
+                : item.listSummary}
+          </Text>
+        </Pressable>
+        {item.summaryPhase === "failed" ? (
+          <Pressable
+            onPress={onRetry}
+            disabled={retrying}
+            accessibilityRole="button"
+            accessibilityLabel={`${item.name} 요약 다시 시도`}
+            accessibilityState={{ disabled: retrying }}
+            style={{ paddingLeft: 8 * scale }}
+          >
+            <Text style={muted}>[ 다시 시도 ]</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
 export function OrchestrationGraphPanel({
   theme,
   layout,
@@ -281,6 +383,7 @@ export function OrchestrationGraphPanel({
   const findGraphByAgent = useRpc(findGraphByAgentRpc);
   const getGraph = useRpc(getGraphRpc);
   const readGraphFile = useRpc(readGraphFileRpc);
+  const retryGraphSummary = useRpc(retryGraphSummaryRpc);
   const putSnapshot = useCallback((snapshot: GraphAgentSnapshot) => {
     setSnapshots((prev) => {
       const existing = prev.get(snapshot.id);
@@ -299,6 +402,11 @@ export function OrchestrationGraphPanel({
     });
   }, []);
   const [pickedName, setPickedName] = useState<string | null>(null);
+  const [listOpen, setListOpen] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(true);
+  const listScroll = useRef<ScrollView>(null);
+  const pendingRetries = useRef(new Set<string>());
+  const [retryingNames, setRetryingNames] = useState<ReadonlySet<string>>(() => new Set());
   const found = useQuery({
     queryKey: [findGraphByAgentRpc.name, directory, agentId],
     queryFn: () => findGraphByAgent({ directory: directory!, agentId }),
@@ -307,11 +415,53 @@ export function OrchestrationGraphPanel({
     // the picker without closing and reopening it.
     refetchInterval: FILE_POLL_MS,
   });
-  const graphNames = found.data?.names ?? NO_GRAPH_NAMES;
+  const graphItems = found.data?.items ?? NO_GRAPH_ITEMS;
   // A pick sticks while its graph is still listed; without one the newest graph is shown, which is
   // what the panel showed before the picker existed. A newer graph must not override a pick.
   const graphName =
-    pickedName != null && graphNames.includes(pickedName) ? pickedName : (graphNames[0] ?? null);
+    pickedName != null && graphItems.some((item) => item.name === pickedName)
+      ? pickedName
+      : (graphItems[0]?.name ?? null);
+  const selectedItem = graphItems.find((item) => item.name === graphName);
+  const listRowHeight = Math.min(layout.compact ? 84 : 96, panelSize.height * 0.6 / 5);
+  const listHeight = Math.min(graphItems.length, 5) * listRowHeight;
+  const selectedOffset = Math.max(0, graphItems.findIndex((item) => item.name === graphName)) * listRowHeight;
+  useEffect(() => {
+    if (found.isSuccess && pickedName != null && !graphItems.some((item) => item.name === pickedName)) {
+      setPickedName(null);
+    }
+    if (graphItems.length < 2) {
+      setListOpen(false);
+    }
+  }, [found.isSuccess, graphItems, pickedName]);
+  useEffect(() => {
+    setPickedName(null);
+    setListOpen(false);
+  }, [directory, agentId]);
+  useEffect(() => {
+    if (listOpen) {
+      listScroll.current?.scrollTo({ y: selectedOffset, animated: false });
+    }
+  }, [listOpen, selectedOffset]);
+  const handleRetry = useCallback(async (name: string) => {
+    if (directory == null) {
+      return;
+    }
+    const key = JSON.stringify([directory, name]);
+    if (pendingRetries.current.has(key)) {
+      return;
+    }
+    pendingRetries.current.add(key);
+    setRetryingNames(new Set(pendingRetries.current));
+    try {
+      await retryGraphSummary({ directory, name });
+    } catch {
+      // RPC 실패로 목록 선택이나 파일 조회를 막지 않는다. 표시 상태는 다음 목록 응답을 따른다.
+    } finally {
+      pendingRetries.current.delete(key);
+      setRetryingNames(new Set(pendingRetries.current));
+    }
+  }, [directory, retryGraphSummary]);
   const graph = useQuery({
     queryKey: [getGraphRpc.name, directory, graphName],
     queryFn: () => getGraph({ directory: directory!, name: graphName! }),
@@ -365,12 +515,12 @@ export function OrchestrationGraphPanel({
     });
   }, [directory, readGraphFile, graphName]);
   const source = useMemo(() => {
-    const file = fileView ?? graph.data;
+    const file = fileView?.name === graphName ? fileView : graph.data;
     if (file == null) {
       return null;
     }
     return { ...file, root: file.root ?? graph.data?.root ?? null };
-  }, [fileView, graph.data]);
+  }, [fileView, graph.data, graphName]);
   const view = useMemo(
     () => (source == null ? null : applyLiveGraph(source, snapshots)),
     [source, snapshots],
@@ -447,8 +597,8 @@ export function OrchestrationGraphPanel({
       content: {
         padding: layout.compact ? 16 : 24,
         gap: 12,
+        zIndex: 10,
       },
-      title: { color: theme.colors.foreground, fontSize: layout.compact ? 18 : 22 },
       label: { color: theme.colors.foregroundMuted },
       canvasWrap: {
         backgroundColor: theme.colors.surface1,
@@ -495,7 +645,7 @@ export function OrchestrationGraphPanel({
             Math.max(TOOLTIP_MARGIN, panelSize.height - tooltipHeight - TOOLTIP_MARGIN),
           ),
         };
-  if (found.isSuccess && graphNames.length === 0) {
+  if (found.isSuccess && graphItems.length === 0) {
     return (
       <View style={styles.screen}>
         <View style={styles.content}>
@@ -514,16 +664,52 @@ export function OrchestrationGraphPanel({
       }}
     >
       <View style={styles.content}>
-        {graphNames.length > 1 && graphName != null ? (
-          <SettingsSelect
-            label="그래프"
-            value={graphName}
-            options={graphNames.map((name) => ({ label: name, value: name }))}
-            onValueChange={setPickedName}
-          />
-        ) : (
-          <Text style={styles.title}>{graphName}</Text>
-        )}
+        {selectedItem != null ? (
+          <View style={{ width: "100%", zIndex: 10 }}>
+            <GraphListRow
+              item={selectedItem}
+              theme={theme}
+              compact={layout.compact}
+              expanded={graphItems.length > 1 ? listOpen : undefined}
+              onSelect={graphItems.length > 1 ? () => setListOpen((open) => !open) : undefined}
+              retrying={retryingNames.has(JSON.stringify([directory, selectedItem.name]))}
+              onRetry={() => void handleRetry(selectedItem.name)}
+            />
+            {listOpen && graphItems.length > 1 ? (
+              <ScrollView
+                ref={listScroll}
+                style={{
+                  position: "absolute",
+                  top: "100%",
+                  left: 0,
+                  right: 0,
+                  height: listHeight,
+                  maxHeight: panelSize.height * 0.6,
+                  backgroundColor: theme.colors.surface1,
+                }}
+                contentOffset={{ x: 0, y: selectedOffset }}
+                onContentSizeChange={() => listScroll.current?.scrollTo({ y: selectedOffset, animated: false })}
+              >
+                {graphItems.map((item) => (
+                  <GraphListRow
+                    key={item.name}
+                    item={item}
+                    theme={theme}
+                    compact={layout.compact}
+                    height={listRowHeight}
+                    selected={item.name === graphName}
+                    retrying={retryingNames.has(JSON.stringify([directory, item.name]))}
+                    onSelect={() => {
+                      setPickedName(item.name);
+                      setListOpen(false);
+                    }}
+                    onRetry={() => void handleRetry(item.name)}
+                  />
+                ))}
+              </ScrollView>
+            ) : null}
+          </View>
+        ) : null}
         {tapIds.map((id) => (
           <AgentSnapshotTap key={id} agentId={id} onSnapshot={putSnapshot} />
         ))}
@@ -535,6 +721,35 @@ export function OrchestrationGraphPanel({
           <Text style={styles.label}>{graph.error instanceof Error ? graph.error.message : "그래프를 읽지 못했습니다"}</Text>
         ) : null}
         {found.isPending || (graphName != null && graph.isPending) ? <Text style={styles.label}>불러오는 중</Text> : null}
+        {selectedItem != null ? (
+          <View style={{ width: "100%", gap: 6 }}>
+            <Pressable
+              onPress={() => setSummaryOpen((open) => !open)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: summaryOpen }}
+              accessibilityLabel="그래프 요약 펼치기 또는 접기"
+            >
+              <Text style={styles.label}>{summaryOpen ? "▾ 요약" : "▸ 요약"}</Text>
+            </Pressable>
+            {summaryOpen ? (
+              selectedItem.summaryPhase === "generating" ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <ActivityIndicator size="small" color={theme.colors.foregroundMuted} />
+                  <Text style={styles.label}>요약 중...</Text>
+                </View>
+              ) : (
+                <View style={{ gap: 6 }}>
+                  {selectedItem.summaryPhase === "failed" ? (
+                    <Text style={styles.label}>{GRAPH_SUMMARY_FAILED_LABEL}</Text>
+                  ) : null}
+                  {selectedItem.summary != null ? (
+                    <Text style={{ color: theme.colors.foreground }}>{selectedItem.summary}</Text>
+                  ) : null}
+                </View>
+              )
+            ) : null}
+          </View>
+        ) : null}
       </View>
       {view != null && placed != null ? (
         <View

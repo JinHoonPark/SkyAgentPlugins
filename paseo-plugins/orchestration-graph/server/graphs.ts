@@ -8,11 +8,14 @@ import {
   getGraphRpc,
   PARENT_AGENT_ID_LABEL,
   readGraphFileRpc,
+  retryGraphSummaryRpc,
   resolveRoot,
   synthesizeStatus,
   type GraphAgentSnapshot,
+  type GraphListItem,
   type GraphNodeShape,
 } from "../shared/graphs";
+import { observeGraphSummary, retryGraphSummary } from "./summary";
 
 const REQUIRED_COLUMNS = ["노드 ID", "프로필", "상태", "agentId"] as const;
 
@@ -37,19 +40,28 @@ export type ParsedMermaid = {
 
 type ListedAgent = GraphAgentSnapshot;
 
+type LoadedGraph = {
+  name: string;
+  rows: ParsedGraphRow[];
+  mermaid: ParsedMermaid;
+};
+
 export async function findGraphByAgent(
   { directory, agentId }: RpcInput<typeof findGraphByAgentRpc>,
   context: PluginHandlerContext,
 ) {
-  const graphNames = listGraphNames(directory);
+  const graphs = listGraphs(directory);
   const listed = await context.paseo.agents.list();
   const agents = new Map<string, ListedAgent>();
   for (const entry of listed.entries) {
     agents.set(entry.agent.id, entry.agent);
   }
-  const matched: Array<{ name: string; mtime: number }> = [];
-  for (const name of graphNames) {
-    const loaded = loadParsedGraph(directory, name);
+
+  const parsed = new Map<string, LoadedGraph>();
+  const matched: GraphFile[] = [];
+  for (const graph of graphs) {
+    const loaded = loadParsedGraph(directory, graph.name);
+    parsed.set(graph.name, loaded);
     const inTable = loaded.rows.some((row) => row.agentId === agentId);
     const isParent = loaded.rows.some((row) => {
       if (row.agentId == null) {
@@ -61,30 +73,66 @@ export async function findGraphByAgent(
     if (!inTable && !isParent) {
       continue;
     }
-    const graphFile = join(resolve(directory), ".skywork", "paseo-orchestration", name, "GRAPH.md");
-    matched.push({ name, mtime: statSync(graphFile).mtimeMs });
+    matched.push(graph);
   }
   // sort is stable, so equal mtimes keep the readdir order the single-pick loop used to keep.
   matched.sort((left, right) => right.mtime - left.mtime);
-  return { names: matched.map((entry) => entry.name) };
+
+  const selected =
+    matched.length > 0 ? matched.map((graph) => ({ graph, fallback: false })) : fallbackPick(graphs);
+
+  // 매칭 또는 폴백으로 고른 그래프만 요약 대상이다. 반환 목록 밖 그래프는 요약하지 않는다.
+  const items: GraphListItem[] = selected.map(({ graph, fallback }) => {
+    const loaded = parsed.get(graph.name) ?? loadParsedGraph(directory, graph.name);
+    return {
+      name: graph.name,
+      fallback,
+      ...observeGraphSummary(directory, graph.name, loaded.rows, loaded.mermaid),
+    };
+  });
+
+  return { names: items.map((item) => item.name), items };
 }
 
-function listGraphNames(directory: string) {
+/**
+ * 요청받은 에이전트로 매칭되는 그래프가 하나도 없을 때만 쓰는 폴백.
+ * 같은 요청 directory에서 실행 기록을 가진 실행 디렉터리 가운데 수정 시각이 가장 최신인 한 개를 고른다.
+ */
+function fallbackPick(graphs: GraphFile[]) {
+  let newest: GraphFile | null = null;
+  for (const graph of graphs) {
+    if (newest == null || graph.mtime > newest.mtime) {
+      newest = graph;
+    }
+  }
+  return newest == null ? [] : [{ graph: newest, fallback: true }];
+}
+
+/** `[ 다시 시도 ]` 버튼이 부르는 자리. 지정한 그래프를 첫 단계·후보 처음부터 다시 만든다. */
+export function retryGraphSummaryHandler({ directory, name }: RpcInput<typeof retryGraphSummaryRpc>) {
+  const loaded = loadParsedGraph(directory, name);
+  return retryGraphSummary(directory, loaded.name, loaded.rows, loaded.mermaid);
+}
+
+type GraphFile = { name: string; mtime: number };
+
+function listGraphs(directory: string): GraphFile[] {
   const orchestrationDir = join(resolve(directory), ".skywork", "paseo-orchestration");
   if (!existsSync(orchestrationDir)) {
     return [];
   }
 
-  const names: string[] = [];
+  const graphs: GraphFile[] = [];
   for (const entry of readdirSync(orchestrationDir, { withFileTypes: true })) {
     if (!entry.isDirectory()) {
       continue;
     }
-    if (existsSync(join(orchestrationDir, entry.name, "GRAPH.md"))) {
-      names.push(entry.name);
+    const graphFile = join(orchestrationDir, entry.name, "GRAPH.md");
+    if (existsSync(graphFile)) {
+      graphs.push({ name: entry.name, mtime: statSync(graphFile).mtimeMs });
     }
   }
-  return names;
+  return graphs;
 }
 
 export function isGraphName(name: string) {
@@ -421,7 +469,7 @@ export async function getGraph(
   return assembleGraph(loaded.name, loaded.rows, loaded.mermaid, listed);
 }
 
-function loadParsedGraph(directory: string, name: string) {
+function loadParsedGraph(directory: string, name: string): LoadedGraph {
   if (!isGraphName(name)) {
     throw new Error("invalid graph name: " + name);
   }
