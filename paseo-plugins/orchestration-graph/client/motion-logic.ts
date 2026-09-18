@@ -42,6 +42,7 @@ export const STATUS_SCALE: Record<NodeStatus, number> = {
   "실행 중": 1.04,
   완료: 1.025,
   실패: 1.03,
+  생략: 1,
 };
 
 export const STATUS_ICON: Record<NodeStatus, string> = {
@@ -49,6 +50,7 @@ export const STATUS_ICON: Record<NodeStatus, string> = {
   "실행 중": "Play",
   완료: "Check",
   실패: "X",
+  생략: "SkipForward",
 };
 
 export const STATUS_MOTION_MS = 280;
@@ -69,6 +71,9 @@ function statusPaint(status: NodeStatus, colors: GraphThemeColors): string {
       return colors.statusDanger;
     case "대기":
       return colors.foregroundMuted;
+    case "생략":
+      // 건너뛴 단계는 진행 중이 아니므로 대기와 같은 muted 계열로 낮춘다.
+      return colors.foregroundMuted;
   }
 }
 
@@ -81,6 +86,7 @@ export function statusVisual(status: NodeStatus | null | undefined, colors: Grap
       borderColor: colors.foregroundMuted,
       borderWidth: 1,
       scale: 1,
+      opacity: 1,
       dashed: true,
       statusColor: null as string | null,
       boxShadow: [NODE_SHADOW],
@@ -94,6 +100,8 @@ export function statusVisual(status: NodeStatus | null | undefined, colors: Grap
     borderColor: waiting ? colors.foregroundMuted : running ? colors.accent : colors.border,
     borderWidth: running ? 2 : 1,
     scale: STATUS_SCALE[status],
+    // 건너뛴 노드는 돌지 않았다는 것이 한눈에 보이도록 흐리게 그린다.
+    opacity: status === "생략" ? 0.45 : 1,
     dashed: false,
     statusColor: paint,
     boxShadow: running

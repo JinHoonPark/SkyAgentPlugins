@@ -301,7 +301,7 @@ const NodeBoxView = memo(
             transform: [{ translateX: pos.tx }, { translateY: pos.ty }, { scale }],
           }}
         >
-          <View style={{ flexDirection: "row", width, height }}>
+          <View style={{ flexDirection: "row", width, height, opacity: range.to.opacity }}>
             <GateArm side="left" height={height} colors={colors} />
             <View
               style={{
@@ -365,6 +365,7 @@ const NodeBoxView = memo(
             borderRadius: NODE_RADIUS,
             borderStyle: range.to.dashed ? "dashed" : "solid",
             boxShadow: range.to.boxShadow,
+            opacity: range.to.opacity,
             overflow: "visible",
           }}
         >
