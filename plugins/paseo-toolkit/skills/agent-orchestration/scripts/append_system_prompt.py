@@ -2,7 +2,7 @@
 """Append one line to daemon.appendSystemPrompt with backup, reload, and rollback.
 
 Default is dry-run: print the four presentation fields and write nothing.
-Pass --apply only after an explicit user approval (SPEC.md §4.5 steps 4–6).
+Pass --apply only after an explicit user approval.
 """
 
 from __future__ import annotations
