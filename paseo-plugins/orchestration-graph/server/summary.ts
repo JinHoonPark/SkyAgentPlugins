@@ -114,10 +114,14 @@ export function summarySignature(input: SummaryInput) {
   return createHash("sha256").update(canonical).digest("hex");
 }
 
-/** mermaid 라벨 셋째 줄부터를 합친 문구, 프로필 칸의 ` — ` 뒤 문구 순으로 처음 얻어지는 값. */
+/**
+ * mermaid 라벨에서 뽑은 작업 문구, 프로필 칸의 ` — ` 뒤 문구 순으로 처음 얻어지는 값.
+ * 워커 노드 라벨은 셋째 줄이 작업이라 셋째 줄부터를 쓰고, 제어 노드 라벨은 둘째 줄이 작업이라 둘째 줄을 쓴다.
+ * 워커 노드의 둘째 줄은 모델명이므로 작업 문구로 쓰지 않는다.
+ */
 function taskPhrase(labelLines: string[] | undefined, profile: string) {
-  if (labelLines != null && labelLines.length > 2) {
-    const fromLabel = labelLines.slice(2).join(" ").trim();
+  if (labelLines != null && labelLines.length >= 2) {
+    const fromLabel = (labelLines.length > 2 ? labelLines.slice(2) : labelLines.slice(1)).join(" ").trim();
     if (fromLabel.length > 0) {
       return fromLabel;
     }

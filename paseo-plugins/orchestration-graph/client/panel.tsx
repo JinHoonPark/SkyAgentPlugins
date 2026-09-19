@@ -237,6 +237,7 @@ function GraphListRow({
   retrying,
   onSelect,
   onRetry,
+  showSummaryLine = true,
 }: {
   item: GraphListItem;
   theme: PluginAgentPanelProps["theme"];
@@ -244,9 +245,11 @@ function GraphListRow({
   height?: number;
   selected?: boolean;
   expanded?: boolean;
-  retrying: boolean;
+  retrying?: boolean;
   onSelect?: () => void;
-  onRetry: () => void;
+  onRetry?: () => void;
+  /** 머리 줄에서는 30자 요약 줄을 그리지 않는다. 바로 아래 요약란의 100자 요약과 같은 그래프를 두 번 설명한다. */
+  showSummaryLine?: boolean;
 }) {
   const baseHeight = compact ? 84 : 96;
   const scale = height == null ? 1 : Math.min(1, height / baseHeight);
@@ -255,7 +258,9 @@ function GraphListRow({
     <View
       style={{
         width: "100%",
-        height: height ?? baseHeight,
+        // 고정 높이는 제목 줄과 요약 줄 두 줄을 담는 값이다. 요약 줄을 그리지 않는 머리 줄에서는
+        // 내용 높이에 맡긴다.
+        height: showSummaryLine ? (height ?? baseHeight) : undefined,
         justifyContent: "center",
         gap: 4 * scale,
         paddingHorizontal: 8 * scale,
@@ -291,38 +296,40 @@ function GraphListRow({
           <Text style={{ color: theme.colors.foregroundMuted, paddingLeft: 8 }}>{expanded ? "▴" : "▾"}</Text>
         ) : null}
       </Pressable>
-      <View style={{ paddingLeft: 8 * scale, flexDirection: "row", alignItems: "center" }}>
-        <Pressable
-          disabled={onSelect == null}
-          onPress={onSelect}
-          accessibilityRole={onSelect == null ? undefined : "button"}
-          accessibilityLabel={item.name}
-          style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 6 * scale }}
-        >
-          {item.summaryPhase === "generating" ? (
-            <ActivityIndicator size="small" color={theme.colors.foregroundMuted} />
-          ) : null}
-          <Text numberOfLines={1} ellipsizeMode="tail" style={[muted, { flex: 1 }]}>
-            {item.summaryPhase === "generating"
-              ? "요약 중..."
-              : item.summaryPhase === "failed"
-                ? GRAPH_SUMMARY_FAILED_LABEL
-                : item.listSummary}
-          </Text>
-        </Pressable>
-        {item.summaryPhase === "failed" ? (
+      {showSummaryLine ? (
+        <View style={{ paddingLeft: 8 * scale, flexDirection: "row", alignItems: "center" }}>
           <Pressable
-            onPress={onRetry}
-            disabled={retrying}
-            accessibilityRole="button"
-            accessibilityLabel={`${item.name} 요약 다시 시도`}
-            accessibilityState={{ disabled: retrying }}
-            style={{ paddingLeft: 8 * scale }}
+            disabled={onSelect == null}
+            onPress={onSelect}
+            accessibilityRole={onSelect == null ? undefined : "button"}
+            accessibilityLabel={item.name}
+            style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 6 * scale }}
           >
-            <Text style={muted}>[ 다시 시도 ]</Text>
+            {item.summaryPhase === "generating" ? (
+              <ActivityIndicator size="small" color={theme.colors.foregroundMuted} />
+            ) : null}
+            <Text numberOfLines={1} ellipsizeMode="tail" style={[muted, { flex: 1 }]}>
+              {item.summaryPhase === "generating"
+                ? "요약 중..."
+                : item.summaryPhase === "failed"
+                  ? GRAPH_SUMMARY_FAILED_LABEL
+                  : item.listSummary}
+            </Text>
           </Pressable>
-        ) : null}
-      </View>
+          {item.summaryPhase === "failed" && onRetry != null ? (
+            <Pressable
+              onPress={onRetry}
+              disabled={retrying}
+              accessibilityRole="button"
+              accessibilityLabel={`${item.name} 요약 다시 시도`}
+              accessibilityState={{ disabled: retrying }}
+              style={{ paddingLeft: 8 * scale }}
+            >
+              <Text style={muted}>[ 다시 시도 ]</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -672,8 +679,7 @@ export function OrchestrationGraphPanel({
               compact={layout.compact}
               expanded={graphItems.length > 1 ? listOpen : undefined}
               onSelect={graphItems.length > 1 ? () => setListOpen((open) => !open) : undefined}
-              retrying={retryingNames.has(JSON.stringify([directory, selectedItem.name]))}
-              onRetry={() => void handleRetry(selectedItem.name)}
+              showSummaryLine={false}
             />
             {listOpen && graphItems.length > 1 ? (
               <ScrollView
@@ -740,7 +746,20 @@ export function OrchestrationGraphPanel({
               ) : (
                 <View style={{ gap: 6 }}>
                   {selectedItem.summaryPhase === "failed" ? (
-                    <Text style={styles.label}>{GRAPH_SUMMARY_FAILED_LABEL}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <Text style={styles.label}>{GRAPH_SUMMARY_FAILED_LABEL}</Text>
+                      <Pressable
+                        onPress={() => void handleRetry(selectedItem.name)}
+                        disabled={retryingNames.has(JSON.stringify([directory, selectedItem.name]))}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${selectedItem.name} 요약 다시 시도`}
+                        accessibilityState={{
+                          disabled: retryingNames.has(JSON.stringify([directory, selectedItem.name])),
+                        }}
+                      >
+                        <Text style={styles.label}>[ 다시 시도 ]</Text>
+                      </Pressable>
+                    </View>
                   ) : null}
                   {selectedItem.summary != null ? (
                     <Text style={{ color: theme.colors.foreground }}>{selectedItem.summary}</Text>
