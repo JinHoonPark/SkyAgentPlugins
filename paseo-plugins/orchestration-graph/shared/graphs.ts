@@ -6,9 +6,10 @@ export const GRAPH_WAITING_LABEL = "작업 대기중" as const;
 /** 요약을 만들지 못한 그래프에 붙는 문구. 목록 항목과 요약란이 이 값을 쓴다. */
 export const GRAPH_SUMMARY_FAILED_LABEL = "요약 모델 연결 안 됨." as const;
 
-export const SUMMARY_MAX_CHARS = 100;
-/** 목록 요약의 제품 목표는 30자이며, 내부 수용 상한만 35자다. 모델 지시에는 넣지 않는다. */
-export const LIST_SUMMARY_MAX_CHARS = 35;
+/** 요약란 요약의 통과 기준. 모델 지시에는 넣지 않으며, 여유는 프롬프트의 지침값과 이 값 사이에 있다. */
+export const SUMMARY_MAX_CHARS = 120;
+/** 목록 요약의 통과 기준. 모델 지시에는 넣지 않으며, 여유는 프롬프트의 지침값과 이 값 사이에 있다. */
+export const LIST_SUMMARY_MAX_CHARS = 36;
 
 /**
  * 한 그래프의 요약 상태.
@@ -25,9 +26,9 @@ export const graphListItem = z.object({
   name: z.string(),
   /** 매칭 후보가 없어 요청 directory의 실행 기록 최신 한 개로 골라낸 그래프인지. */
   fallback: z.boolean(),
-  /** 요약란에 보이는 100자 요약. 아직 만든 적이 없으면 null. */
+  /** 요약란에 보이는 요약. `SUMMARY_MAX_CHARS` 이하이며 아직 만든 적이 없으면 null. */
   summary: z.string().refine((text) => [...text].length <= SUMMARY_MAX_CHARS).nullable(),
-  /** 목록 항목 둘째 줄 요약. 30자 목표·내부 35자 상한이며 아직 만든 적이 없으면 null. */
+  /** 목록 항목 둘째 줄 요약. `LIST_SUMMARY_MAX_CHARS` 이하이며 아직 만든 적이 없으면 null. */
   listSummary: z.string().refine((text) => [...text].length <= LIST_SUMMARY_MAX_CHARS).nullable(),
   summaryPhase: graphSummaryPhase,
   /** 저장된 두 요약이 지금 입력과 같아 다시 만들 필요가 없는지. */

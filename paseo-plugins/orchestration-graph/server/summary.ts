@@ -1,5 +1,5 @@
 /**
- * 그래프 하나의 요약 두 자리(100자·30자)를 만들고 캐시에 남긴다.
+ * 그래프 하나의 요약 두 자리(120자·36자)를 만들고 캐시에 남긴다.
  *
  * 생성 단계는 항상 둘이고 순차 실행한다. 첫 단계가 실패하면 둘째 단계는 시작하지 않는다.
  * 같은 그래프에 대해 동시에 도는 작업은 하나뿐이고, 진행 중에 입력이 바뀌면 그 변화들은
@@ -8,15 +8,26 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { LIST_SUMMARY_MAX_CHARS, SUMMARY_MAX_CHARS, type GraphSummaryPhase } from "../shared/graphs";
+import {
+  LIST_SUMMARY_MAX_CHARS,
+  SUMMARY_MAX_CHARS,
+  type GraphSummaryPhase,
+} from "../shared/graphs";
 import type { ParsedGraphRow, ParsedMermaid } from "./graphs";
 import { CANDIDATE_TIMEOUT_MS, cleanCandidateText, generate } from "./models";
 
 /**
- * 100자 단계 프롬프트가 노리는 길이. 상한에 딱 맞추라고 하면 실제 모델은 자주 넘긴다.
- * 상한보다 낮은 목표를 주어야 상한 안에 들어온다.
+ * 첫 단계 프롬프트에 넣는 지침 길이. 상한에 딱 맞추라고 하면 실제 모델은 자주 넘긴다.
+ * 지침값보다 높은 통과 기준(`SUMMARY_MAX_CHARS`)을 두어 그 사이를 여유로 남긴다.
+ * 통과 기준은 모델 지시에 넣지 않는다.
  */
-const SUMMARY_TARGET_CHARS = 70;
+const SUMMARY_INSTRUCTION_CHARS = 90;
+
+/**
+ * 둘째 단계 프롬프트에 넣는 지침 길이. 첫 단계와 같은 결로,
+ * 지침값보다 높은 통과 기준(`LIST_SUMMARY_MAX_CHARS`) 사이를 여유로 남긴다.
+ */
+const LIST_SUMMARY_INSTRUCTION_CHARS = 25;
 
 /** 캐시 파일 이름. 그래프 디렉터리마다 한 개다. */
 const CACHE_FILE = ".summary-cache.json";
@@ -340,7 +351,7 @@ async function runJob(
   }
 }
 
-/** 100자 요약을 만든 뒤, 그 100자 요약만 입력으로 30자 목록 요약을 만든다. */
+/** 120자 요약을 만든 뒤, 그 120자 요약만 입력으로 36자 목록 요약을 만든다. */
 async function createSummaries(name: string, input: SummaryInput) {
   const summary = await callStage(1, name, summaryPrompt(input), SUMMARY_MAX_CHARS);
   const listSummary = await callStage(2, name, listSummaryPrompt(summary), LIST_SUMMARY_MAX_CHARS);
@@ -362,7 +373,7 @@ async function callStage(stage: number, name: string, prompt: string, maxChars: 
 }
 
 // ── 프롬프트 ────────────────────────────────────────────────────────────────
-// 한 호출에는 지시를 하나만 준다. 30자를 만드는 호출의 입력은 100자 요약 하나뿐이다.
+// 한 호출에는 지시를 하나만 준다. 목록 요약을 만드는 호출의 입력은 앞 단계 요약 하나뿐이다.
 
 function summaryPrompt(input: SummaryInput) {
   const nodeLines = input.nodes.map((node) => {
@@ -377,10 +388,8 @@ function summaryPrompt(input: SummaryInput) {
     "",
     "지킬 것:",
     "- " +
-      SUMMARY_MAX_CHARS +
-      "자 이하(공백과 문장부호 포함)로 쓴다. 넘기면 그 답은 쓰지 못한다. " +
-      SUMMARY_TARGET_CHARS +
-      "자 안팎을 목표로 한다.",
+      SUMMARY_INSTRUCTION_CHARS +
+      "자 이하(공백과 문장부호 포함)로 쓴다. 넘기면 그 답은 쓰지 못한다.",
     "- 그래프 이름이나 노드 ID를 문장에 넣지 않는다. 노드가 하는 일만 적는다.",
     "- 노드마다 상태를 따로 적지 않는다. 완료된 일, 실패한 일, 아직 안 끝난 일을 묶어 한 번씩만 적는다.",
     '- 높임말을 쓰지 않는다. "했다", "이다"처럼 짧게 끝낸다.',
@@ -403,6 +412,9 @@ function listSummaryPrompt(summary: string) {
     "다음 한국어 요약을 목록에 표시할 짧은 한 문장으로 줄인다.",
     "",
     "지킬 것:",
+    "- " +
+      LIST_SUMMARY_INSTRUCTION_CHARS +
+      "자 이하(공백과 문장부호 포함)로 쓴다. 넘기면 그 답은 쓰지 못한다.",
     "- 여러 노드를 다 적지 말고 가장 중요한 진행 상황 하나만 남긴다.",
     "- 마크다운, 제목 줄, 목록 기호, 굵게 표기, 따옴표, 코드 표기를 쓰지 않는다. 줄인 문장만 그대로 출력한다.",
     "- 원문에 없는 사실을 더하지 않는다.",
