@@ -38,9 +38,9 @@ function command(cli: Cli): Command {
 
 function cliArguments(cli: Cli) {
   return cli === "codex" ? [
-    "exec", "--model", "gpt-5.6-luna", "--json", "--ephemeral",
+    "exec", "--model", "gpt-6-luna", "--json", "--ephemeral",
     "--sandbox", "read-only", "--skip-git-repo-check", "--ignore-user-config", "--ignore-rules",
-    "--strict-config", "-c", 'model_reasoning_effort="low"', "-c", "project_doc_max_bytes=0",
+    "--strict-config", "-c", 'model_reasoning_effort="none"', "-c", "project_doc_max_bytes=0",
     "-c", 'approval_policy="never"', "-",
   ] : [
     "-p", "--model", "claude-haiku-4-5", "--tools", "", "--no-session-persistence",
@@ -165,11 +165,17 @@ export async function runCliCandidate(cli: Cli, options: GenerateOptions): Promi
         const event = JSON.parse(line);
         if (event.kind === "ready") {
           started = Date.now();
-          child = spawn(launch.file, [...launch.args, ...cliArguments(cli)], {
-            cwd, shell: false, windowsHide: true, stdio: ["pipe", "pipe", "pipe"],
-            // 설치 CLI 도움말의 safe-mode 환경값을 초기화 전부터 적용한다. 인증은 그대로 상속한다.
-            env: cli === "claude" ? { ...process.env, CLAUDE_CODE_SAFE_MODE: "1" } : process.env,
-          });
+          try {
+            child = spawn(launch.file, [...launch.args, ...cliArguments(cli)], {
+              cwd, shell: false, windowsHide: true, stdio: ["pipe", "pipe", "pipe"],
+              // 설치 CLI 도움말의 safe-mode 환경값을 초기화 전부터 적용한다. 인증은 그대로 상속한다.
+              env: cli === "claude" ? { ...process.env, CLAUDE_CODE_SAFE_MODE: "1" } : process.env,
+            });
+          } catch {
+            failure = new Error(cli + " spawn failed");
+            guard.stdin.end();
+            return;
+          }
           child.stdin!.on("error", () => {});
           child.stdout!.setEncoding("utf8");
           child.stdout!.on("data", (text: string) => { output += text; });
@@ -223,6 +229,6 @@ function finalText(cli: Cli, output: string): string {
       }
     }
   }
-  if (!completed || typeof text !== "string" || !text.trim()) throw new Error(cli + " missing final text");
+  if (!completed || typeof text !== "string") throw new Error(cli + " missing final text");
   return text;
 }

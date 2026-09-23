@@ -1,7 +1,7 @@
 {
   "name": "orchestration-graph",
   "private": true,
-  "version": "0.5.2",
+  "version": "0.6.0",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "vendor:dagre": "esbuild @dagrejs/dagre --bundle --format=esm --platform=neutral --target=es2020 --outfile=client/vendor/dagre.js"

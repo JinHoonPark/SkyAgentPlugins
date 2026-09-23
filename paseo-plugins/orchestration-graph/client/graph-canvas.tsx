@@ -6,6 +6,7 @@ import { registerStop } from "./cleanup";
 import {
   BADGE_HEIGHT,
   EXIT_FADE_MS,
+  EDGE_LABEL_MAX_WIDTH,
   FLOW_PERIOD_MS,
   GATE_ARM_WIDTH,
   INTRO_FADE_MS,
@@ -18,6 +19,7 @@ import {
   STATUS_ICON,
   STATUS_MOTION_MS,
   incomingPaths,
+  edgeLabelPlacements,
   introEdgeDelayMs,
   layoutMoveNeeded,
   pointAlongSegments,
@@ -98,7 +100,6 @@ type NodeBoxProps = {
 const HEAD_WIDTH = 9;
 const HEAD_HEIGHT = 8;
 /** 엣지 라벨 한 줄의 최대 폭과 최대 줄 수. 노드 카드(260)보다 좁게 잡아 카드를 덮지 않는다. */
-const LABEL_MAX_WIDTH = 160;
 const LABEL_MAX_LINES = 2;
 const LABEL_PAD_X = 3;
 const LABEL_PAD_Y = 1;
@@ -626,24 +627,26 @@ export type LabelHover = {
   height: number;
 };
 
-/** 선 위에 놓이는 라벨. 선과 형제인 절대 좌표라 기울지 않고, 폭을 실측해 중심을 선 중점에 맞춘다. */
+/** 선 위에 놓이는 라벨. 절대 좌표로 기울기를 막고, 실측 폭으로 가운데 또는 안쪽 변을 맞춘다. */
 function EdgeLabelView({
   text,
   x,
   y,
+  align,
   colors,
   onHover,
 }: {
   text: string;
   x: number;
   y: number;
+  align: "center" | "start" | "end";
   colors: GraphThemeColors;
   onHover?: (hover: LabelHover | null) => void;
 }) {
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [shownHeight, setShownHeight] = useState(0);
   const [fullHeight, setFullHeight] = useState(0);
-  const left = x - size.width / 2;
+  const left = align === "start" ? x : align === "end" ? x - size.width : x - size.width / 2;
   const top = y - size.height / 2;
   // 자르지 않은 사본은 같은 폭으로 접히므로, 줄 수가 늘어난 것이 곧 `…`로 잘렸다는 뜻이다.
   // 문구가 전부 보이는 라벨에는 툴팁이 뜨지 않는다.
@@ -658,7 +661,7 @@ function EdgeLabelView({
         }
       }}
       onHoverOut={() => onHover?.(null)}
-      // 실측한 폭으로 가운데를 맞추므로 줄 수가 늘어도 중심은 선 중점에 그대로 남는다.
+      // 실측한 폭으로 양방향 라벨은 안쪽 변을, 그 밖의 라벨은 중심을 선 중점에 맞춘다.
       onLayout={(event) => {
         const { width, height } = event.nativeEvent.layout;
         setSize((prev) => (prev.width === width && prev.height === height ? prev : { width, height }));
@@ -667,7 +670,7 @@ function EdgeLabelView({
         position: "absolute",
         left,
         top,
-        maxWidth: LABEL_MAX_WIDTH,
+        maxWidth: EDGE_LABEL_MAX_WIDTH,
         paddingHorizontal: LABEL_PAD_X,
         paddingVertical: LABEL_PAD_Y,
         backgroundColor: colors.surface1,
@@ -681,7 +684,7 @@ function EdgeLabelView({
           position: "absolute",
           left: 0,
           top: 0,
-          width: LABEL_MAX_WIDTH - LABEL_PAD_X * 2,
+          width: EDGE_LABEL_MAX_WIDTH - LABEL_PAD_X * 2,
           opacity: 0,
         }}
       >
@@ -741,6 +744,7 @@ export function GraphCanvas({
   const runningSet = useMemo(() => new Set(runningIds), [runningIds]);
   const hasRunning = shouldRunProgressLoop(runningIds.length);
   const incoming = incomingPaths(placed.paths, runningSet);
+  const labelPositions = useMemo(() => edgeLabelPlacements(placed.paths), [placed.paths]);
   const incomingRef = useRef(incoming);
   incomingRef.current = incoming;
   const flowMarkers = useRef(new Map<string, { x: Animated.Value; y: Animated.Value; deg: Animated.Value }>());
@@ -1190,16 +1194,17 @@ export function GraphCanvas({
           if (path.label == null) {
             return null;
           }
-          const mid = pointAlongSegments(path.segments, 0.5);
-          if (mid == null) {
+          const position = labelPositions.get(path.key);
+          if (position == null) {
             return null;
           }
           return (
             <EdgeLabelView
               key={`label-${path.key}`}
               text={path.label}
-              x={mid.x}
-              y={mid.y}
+              x={position.x}
+              y={position.y}
+              align={position.align}
               colors={colors}
               onHover={onLabelHover}
             />

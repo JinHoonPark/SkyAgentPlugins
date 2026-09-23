@@ -1,7 +1,7 @@
 /**
  * 그래프 하나의 요약 두 자리(120자·36자)를 만들고 캐시에 남긴다.
  *
- * 생성 단계는 항상 둘이고 순차 실행한다. 첫 단계가 실패하면 둘째 단계는 시작하지 않는다.
+ * 생성 단계는 한 번이고, 그 응답의 두 줄이 각각 두 요약 자리를 채운다.
  * 같은 그래프에 대해 동시에 도는 작업은 하나뿐이고, 진행 중에 입력이 바뀌면 그 변화들은
  * 진행 중인 작업이 끝난 뒤 가장 최신 입력 하나로 한 번만 합쳐진다.
  */
@@ -62,7 +62,7 @@ type GraphJobState = {
   running: { signature: string } | null;
   /** 진행 중에 들어온 가장 최신 입력. 작업이 끝나면 이 하나로 한 번만 다시 만든다. */
   pending: { signature: string; input: SummaryInput } | null;
-  /** 후보를 모두 거치고도 만들지 못한 서명. 같은 서명으로는 자동으로 다시 부르지 않는다. */
+  /** 요약 생성에 실패한 서명. 같은 서명으로는 자동으로 다시 부르지 않는다. */
   failed: string | null;
   /**
    * 마지막으로 만들어 낸 서명과 그 두 요약, 그리고 그것을 캐시 파일에도 남겼는지.
@@ -313,7 +313,7 @@ async function runJob(
   try {
     created = await createSummaries(name, input);
   } catch (error) {
-    // 후보 전체 실패는 여기서 끝난다. 예외를 RPC 밖으로 밀어내지 않는다.
+    // 후보 순회 또는 요약 검사 실패는 여기서 끝난다. 예외를 RPC 밖으로 밀어내지 않는다.
     console.log(
       "[orchestration-graph] summary.graph graph=" +
         name +
@@ -351,14 +351,20 @@ async function runJob(
   }
 }
 
-/** 120자 요약을 만든 뒤, 그 120자 요약만 입력으로 36자 목록 요약을 만든다. */
+/** 한 호출의 두 줄로 120자 요약과 36자 목록 요약을 함께 만든다. */
 async function createSummaries(name: string, input: SummaryInput) {
-  const summary = await callStage(1, name, summaryPrompt(input), SUMMARY_MAX_CHARS);
-  const listSummary = await callStage(2, name, listSummaryPrompt(summary), LIST_SUMMARY_MAX_CHARS);
+  const pair = await callStage(1, name, summaryPrompt(input), SUMMARY_MAX_CHARS, cleanSummaryPair);
+  const [summary, listSummary] = pair.split("\n");
   return { summary, listSummary };
 }
 
-async function callStage(stage: number, name: string, prompt: string, maxChars: number) {
+async function callStage(
+  stage: number,
+  name: string,
+  prompt: string,
+  maxChars: number,
+  validate?: (raw: string) => string,
+) {
   console.log(
     "[orchestration-graph] summary.stage stage=" +
       stage +
@@ -369,11 +375,11 @@ async function callStage(stage: number, name: string, prompt: string, maxChars: 
       " input=" +
       JSON.stringify(prompt),
   );
-  return generate({ prompt, maxChars, timeoutMs: CANDIDATE_TIMEOUT_MS });
+  return generate({ prompt, maxChars, timeoutMs: CANDIDATE_TIMEOUT_MS, validate });
 }
 
 // ── 프롬프트 ────────────────────────────────────────────────────────────────
-// 한 호출에는 지시를 하나만 준다. 목록 요약을 만드는 호출의 입력은 앞 단계 요약 하나뿐이다.
+// 한 호출은 같은 원본을 바탕으로 두 줄의 요약을 만든다.
 
 function summaryPrompt(input: SummaryInput) {
   const nodeLines = input.nodes.map((node) => {
@@ -396,6 +402,9 @@ function summaryPrompt(input: SummaryInput) {
     "- 마크다운, 제목 줄, 목록 기호, 굵게 표기, 따옴표, 코드 표기를 쓰지 않는다. 요약 문장만 그대로 출력한다.",
     "- 입력에 없는 사실을 단정하지 않는다. 근거가 없으면 모른다고 적는다.",
     "- `생략` 상태 노드는 완료로도 실패로도 적지 않는다. 이름만 적고 뜻은 풀어 쓰지 않는다.",
+    "- 첫 줄에는 전체 요약을, 둘째 줄에는 목록에 표시할 짧은 요약을 쓴다. 정확히 두 줄만 출력한다.",
+    "- 첫 줄은 " + SUMMARY_INSTRUCTION_CHARS + "자 이하, 둘째 줄은 " + LIST_SUMMARY_INSTRUCTION_CHARS + "자 이하로 쓴다.",
+    "- 둘째 줄에는 첫 줄에 없는 사실을 넣지 않는다.",
     "",
     "그래프 이름: " + input.graphName,
     "",
@@ -407,18 +416,15 @@ function summaryPrompt(input: SummaryInput) {
   ].join("\n");
 }
 
-function listSummaryPrompt(summary: string) {
-  return [
-    "다음 한국어 요약을 목록에 표시할 짧은 한 문장으로 줄인다.",
-    "",
-    "지킬 것:",
-    "- " +
-      LIST_SUMMARY_INSTRUCTION_CHARS +
-      "자 이하(공백과 문장부호 포함)로 쓴다. 넘기면 그 답은 쓰지 못한다.",
-    "- 여러 노드를 다 적지 말고 가장 중요한 진행 상황 하나만 남긴다.",
-    "- 마크다운, 제목 줄, 목록 기호, 굵게 표기, 따옴표, 코드 표기를 쓰지 않는다. 줄인 문장만 그대로 출력한다.",
-    "- 원문에 없는 사실을 더하지 않는다.",
-    "",
-    "원문: " + summary,
-  ].join("\n");
+export function cleanSummaryPair(raw: string) {
+  const lines = raw.replace(/\r\n?/g, "\n").split("\n");
+  if (lines.length === 3 && lines[2] === "") {
+    lines.pop();
+  }
+  if (lines.length !== 2) {
+    throw new Error("expected exactly two lines");
+  }
+  const summary = cleanCandidateText(lines[0], SUMMARY_MAX_CHARS);
+  const listSummary = cleanCandidateText(lines[1], LIST_SUMMARY_MAX_CHARS);
+  return summary + "\n" + listSummary;
 }

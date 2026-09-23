@@ -1,5 +1,6 @@
+import dagre from "./vendor/dagre";
 import type { PluginTheme } from "@getpaseo/plugin";
-import type { GraphNodeStatus } from "../shared/graphs";
+import type { GraphNodeShape, GraphNodeStatus } from "../shared/graphs";
 
 export type NodeBox = { id: string; left: number; top: number; width: number; height: number };
 
@@ -32,6 +33,9 @@ export const LINE_HEIGHT = 16;
 export const BADGE_HEIGHT = 22;
 export const NODE_RADIUS = 12;
 export const STATUS_BAR_WIDTH = 3;
+export const EDGE_LABEL_MAX_WIDTH = 160;
+const EDGE_LABEL_GAP = 8;
+const EDGE_LABEL_MARGIN = 4;
 /** 육각형 게이트 카드의 좌우 삼각형 폭. 카드 상자를 이만큼 넓혀 배치한다. */
 export const GATE_ARM_WIDTH = 17;
 
@@ -60,6 +64,174 @@ export const INTRO_FADE_MS = 200;
 export const EXIT_FADE_MS = 280;
 export const PULSE_MS = 700;
 export const FLOW_PERIOD_MS = 1600;
+
+const ROOT_WIDTH = 400;
+const NODE_PAD_Y = 10;
+const ROOT_HEIGHT = BADGE_HEIGHT + NODE_PAD_Y * 2 + LINE_HEIGHT * 2 + 12;
+const NODE_WIDTH = 260;
+const PAD = 16;
+
+function segmentMetrics(ax: number, ay: number, bx: number, by: number): EdgeSegment | null {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const length = Math.sqrt(dx * dx + dy * dy);
+  if (length < 1) {
+    return null;
+  }
+  return {
+    key: "",
+    left: ax,
+    top: ay - 1,
+    width: Math.round(length),
+    // dagre routes with diagonal bends, so the rotation is the real angle of the segment.
+    deg: (Math.atan2(dy, dx) * 180) / Math.PI,
+  };
+}
+
+function segmentsFromPoints(keyBase: string, points: Array<{ x: number; y: number }>) {
+  const drawn: EdgeSegment[] = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const follow = segmentMetrics(points[i].x, points[i].y, points[i + 1].x, points[i + 1].y);
+    if (follow == null) {
+      continue;
+    }
+    drawn.push({ ...follow, key: `${keyBase}-${i}` });
+  }
+  return drawn;
+}
+
+function nodeHeight(lineCount: number) {
+  return BADGE_HEIGHT + NODE_PAD_Y * 2 + Math.max(1, lineCount) * LINE_HEIGHT;
+}
+
+/** 육각형 게이트는 좌우 삼각형만큼 넓은 상자에 담긴다. 선은 그 상자 경계에서 멈춘다. */
+function nodeWidth(shape: GraphNodeShape) {
+  return shape === "hexagon" ? NODE_WIDTH + GATE_ARM_WIDTH * 2 : NODE_WIDTH;
+}
+
+export function layoutGraph(
+  root: { id: string } | null,
+  nodes: Array<{ id: string; labelLines: string[]; shape: GraphNodeShape }>,
+  edges: Array<{ from: string; to: string; dashed: boolean; label: string | null }>,
+  compact: boolean,
+) {
+  const graph = new dagre.graphlib.Graph();
+  graph.setGraph({
+    rankdir: "TB",
+    nodesep: compact ? 16 : 24,
+    // 단계 간격은 엣지 라벨이 들어갈 자리다. 라벨이 도착 노드 경계에 붙어 보이지 않도록
+    // 두 줄짜리 라벨 높이(30)보다 넉넉하게 둔다.
+    ranksep: compact ? 48 : 68,
+  });
+  graph.setDefaultEdgeLabel(() => ({}));
+  const sizes = new Map(
+    nodes.map((node) => [
+      node.id,
+      { width: nodeWidth(node.shape), height: nodeHeight(node.labelLines.length) },
+    ]),
+  );
+  if (root != null) {
+    graph.setNode(root.id, { width: ROOT_WIDTH, height: ROOT_HEIGHT });
+  }
+  for (const node of nodes) {
+    const size = sizes.get(node.id) ?? { width: NODE_WIDTH, height: nodeHeight(1) };
+    graph.setNode(node.id, { width: size.width, height: size.height });
+  }
+  const incomingCount = new Map<string, number>();
+  for (const edge of edges) {
+    graph.setEdge(edge.from, edge.to);
+    incomingCount.set(edge.to, (incomingCount.get(edge.to) ?? 0) + 1);
+  }
+  const entryIds = nodes
+    .map((node) => node.id)
+    .filter((id) => (incomingCount.get(id) ?? 0) === 0);
+  if (root != null) {
+    for (const id of entryIds) {
+      graph.setEdge(root.id, id);
+    }
+  }
+  // dagre resolves cycles itself, so a back edge is laid out like any other edge and stays in the
+  // drawing. Node coordinates are centers; boxes are top-left based.
+  dagre.layout(graph);
+  const boxes = new Map<string, NodeBox>();
+  const place = (id: string, width: number, height: number) => {
+    const node = graph.node(id) as { x: number; y: number } | undefined;
+    const box: NodeBox = {
+      id,
+      left: Math.round((node?.x ?? 0) - width / 2) + PAD,
+      top: Math.round((node?.y ?? 0) - height / 2) + PAD,
+      width,
+      height,
+    };
+    boxes.set(id, box);
+    return box;
+  };
+  for (const node of nodes) {
+    const size = sizes.get(node.id) ?? { width: NODE_WIDTH, height: nodeHeight(1) };
+    place(node.id, size.width, size.height);
+  }
+  const rootBox = root == null ? null : place(root.id, ROOT_WIDTH, ROOT_HEIGHT);
+  let canvasWidth = PAD * 2;
+  let canvasHeight = PAD * 2;
+  for (const box of boxes.values()) {
+    canvasWidth = Math.max(canvasWidth, box.left + box.width + PAD);
+    canvasHeight = Math.max(canvasHeight, box.top + box.height + PAD);
+  }
+  const paths: EdgePath[] = [];
+  const addPath = (key: string, from: string, to: string, dashed: boolean, label: string | null) => {
+    const edge = graph.edge(from, to) as { points?: Array<{ x: number; y: number }> } | undefined;
+    const points = (edge?.points ?? []).map((point) => ({ x: point.x + PAD, y: point.y + PAD }));
+    if (points.length < 2) {
+      return;
+    }
+    const segments = segmentsFromPoints(key, points);
+    if (segments.length > 0) {
+      paths.push({ key, from, to, segments, dashed, label });
+    }
+  };
+  for (const edge of edges) {
+    addPath(`${edge.from}-${edge.to}`, edge.from, edge.to, edge.dashed, edge.label);
+  }
+  if (root != null) {
+    for (const id of entryIds) {
+      addPath(`root-${id}`, root.id, id, false, null);
+    }
+  }
+  const labelPositions = edgeLabelPlacements(paths);
+  let minLabelLeft = Infinity;
+  let maxLabelRight = -Infinity;
+  for (const position of labelPositions.values()) {
+    if (position.align === "end") {
+      minLabelLeft = Math.min(minLabelLeft, position.x - EDGE_LABEL_MAX_WIDTH);
+    } else if (position.align === "start") {
+      maxLabelRight = Math.max(maxLabelRight, position.x + EDGE_LABEL_MAX_WIDTH);
+    }
+  }
+  if (minLabelLeft < Infinity) {
+    const shift = Math.max(0, EDGE_LABEL_MARGIN - minLabelLeft);
+    const extendRight = Math.max(0, maxLabelRight + EDGE_LABEL_MARGIN - canvasWidth);
+    for (const box of boxes.values()) {
+      box.left += shift;
+    }
+    for (const path of paths) {
+      for (const segment of path.segments) {
+        segment.left += shift;
+      }
+    }
+    canvasWidth += shift + extendRight;
+  }
+  const segments = paths.flatMap((path) => path.segments);
+  const placed: PlacedGraph = {
+    boxes,
+    rootBox,
+    entryIds,
+    segments,
+    paths,
+    canvasWidth,
+    canvasHeight,
+  };
+  return placed;
+}
 
 function statusPaint(status: NodeStatus, colors: GraphThemeColors): string {
   switch (status) {
@@ -188,6 +360,44 @@ export function pointAlongSegments(
     y: last.top + 1 + Math.sin(rad) * last.width,
     deg: last.deg,
   };
+}
+
+export type EdgeLabelPlacement = { x: number; y: number; align: "center" | "start" | "end" };
+
+/** 양방향 라벨은 두 선 사이의 경계에 각 상자의 안쪽 변을 맞춘다. */
+export function edgeLabelPlacements(paths: readonly EdgePath[]): Map<string, EdgeLabelPlacement> {
+  const positions = new Map<string, EdgeLabelPlacement>();
+  const labeled = paths.filter((path) => path.label != null);
+  for (const path of labeled) {
+    if (positions.has(path.key)) {
+      continue;
+    }
+    const mid = pointAlongSegments(path.segments, 0.5);
+    if (mid == null) {
+      continue;
+    }
+    const reverse = path.from === path.to
+      ? undefined
+      : labeled.find((other) => other !== path && other.from === path.to && other.to === path.from);
+    const reverseMid = reverse == null ? null : pointAlongSegments(reverse.segments, 0.5);
+    if (reverse == null || reverseMid == null) {
+      positions.set(path.key, { x: mid.x, y: mid.y, align: "center" });
+      continue;
+    }
+    const seam = (mid.x + reverseMid.x) / 2;
+    const pathOnLeft = mid.x < reverseMid.x || (mid.x === reverseMid.x && path.key < reverse.key);
+    positions.set(path.key, {
+      x: seam + (pathOnLeft ? -EDGE_LABEL_GAP / 2 : EDGE_LABEL_GAP / 2),
+      y: mid.y,
+      align: pathOnLeft ? "end" : "start",
+    });
+    positions.set(reverse.key, {
+      x: seam + (pathOnLeft ? EDGE_LABEL_GAP / 2 : -EDGE_LABEL_GAP / 2),
+      y: reverseMid.y,
+      align: pathOnLeft ? "start" : "end",
+    });
+  }
+  return positions;
 }
 
 export function introEdgeDelayMs(nodeCount: number): number {
