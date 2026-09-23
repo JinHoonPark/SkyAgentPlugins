@@ -9,6 +9,7 @@
 - Paseo 프로필 notes는 PC별 설정이다. 시작 전에 list_profiles로 team-lead·spec notes가 plugins/paseo-toolkit/references/presets.md의 두 notes와 문자 단위로 같은지 확인하고, 다르면 사용자 승인 뒤 profile-setup으로 등록한다(C6 전제, 다르면 실측이 새 규칙으로 라우팅되지 않는다).
 - 설치 경로: 경로 B는 그 PC의 체크아웃 경로로 마켓플레이스를 임시 전환한다(아래 절대 경로·설정 줄 번호는 원래 PC 기준이므로 그 PC에서 다시 조회). 브랜치가 원격에 있으므로 경로 A(마켓플레이스를 이 브랜치로 전환)도 가능하다 — 어느 쪽으로 할지 사용자에게 한 번 확인한다.
 - 원래 PC(D:\Paseo-Worktrees\27pr31l5\moody-wolf)의 설치본·마켓플레이스는 바꾸지 않았다. 되돌릴 것 없음.
+- 이 문서와 GRAPH.md의 sha256 해시는 LF 개행 기준이다. core.autocrlf=true인 PC에서는 체크아웃 시 CRLF로 바뀌므로, 비교할 때 CRLF를 LF로 바꾼 내용의 해시로 확인한다(예: `python -c "import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],'rb').read().replace(b'\r\n',b'\n')).hexdigest()[:16])" <파일>`).
 - RUN/.gset.py, RUN/a6-direct/evaluate.py는 상대 경로 기반이라 그대로 쓸 수 있다. evaluate.py는 로그 폴더를 스스로 만든다.
 
 ## 확정 상태
