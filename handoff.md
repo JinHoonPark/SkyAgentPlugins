@@ -13,7 +13,9 @@
 
 ## 현재 상태
 - 독립 리뷰(N39) 종료. 1라운드 지적 2건(A4 인용, C2 참조 깊이)은 N40 patch로 해결. 2라운드 지적 1건(patch가 git 무시 경로 RUN/.gitattributes를 범위 밖으로 추가)은 사용자 판단으로 비차단 수용했다(RUN/nodes/N39.round2.md). 검토 라운드 3 중 2 사용.
-- 리뷰 종료 뒤 중간 커밋 완료(아래 승인 1). 다음은 T13.
+- 리뷰 종료 뒤 중간 커밋 완료(3893e78, 아래 승인 1).
+- T13 1단계(N29) 완료: 두 plugin.json version 0.12.0(미커밋, 최종 커밋에 포함). claude.cmd plugin validate 플러그인·마켓플레이스 모두 종료 0·오류 0, 두 매니페스트 name·version·description 일치, codex skills 유지.
+- 다음: T13 2단계 N41(GRAPH에 행 있음, 대기) — 아래 승인 3의 경로 B로 마켓플레이스 로컬 전환·설치본 갱신·원래 출처 기록·injectIntoAgents 확인.
 
 ## 사용자 승인 완료(재질문 불필요)
 1. 리뷰 합격 뒤 중간 커밋: 스킬 변경 전부(수정 8 + 신규 references/system-prompt.md, scripts/graph_update.py) + references/presets.md + AGENTS.md 미커밋 수정 + 루트 handoff.md(사용자가 나중에 직접 지운다). 버전 변경은 제외. 한국어 커밋 메시지. push는 승인 범위 밖.
@@ -27,7 +29,7 @@ T13 → T14~T17 병렬 실측(T16은 삭제 직전에 사용자 승인 G8) → �
 - codex 워커는 %TEMP%\skill-trigger-eval-* 임시 폴더를 지우지 못한다. 결과가 RUN에 옮겨진 것을 확인한 뒤 팀장이 지운다(사용자 허용).
 - 이 PC에서 claude 실행 파일은 claude.cmd로 확정한다. 다른 Claude·codex 세션도 함께 돌고 있으므로 감시는 저장소·settings.json·설치 플러그인 목록만 한다.
 - GRAPH.md 셀 갱신 보조 스크립트: python RUN/.gset.py <노드ID> "열=값" ...
-- 새 노드 번호는 N41, G11부터 이어 붙인다.
+- 새 노드 번호는 N42, G11부터 이어 붙인다(N41은 설치 노드로 이미 등록).
 
 ## 최종 보고에 넣을 후속 항목
 - presets.md:215 team-lead "권한 근거" 문장이 새 notes(직접 처리)와 어긋난다(범위 밖이라 그대로 둠).
