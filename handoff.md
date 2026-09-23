@@ -4,6 +4,13 @@
 실행 디렉터리 RUN: .skywork/paseo-orchestration/2026-09-22-token-debate/ (git 무시 경로)
 먼저 읽을 것: AGENTS.md, RUN/GRAPH.md(실행 기록 — 노드·상태·agentId 정본), RUN/SPEC.md, RUN/MILESTONE01-Tasks.md
 
+## 다른 PC에서 이어갈 때
+- RUN 폴더는 .gitignore 대상이지만 이 작업 폴더만 `git add -f`로 커밋돼 있다(원시 로그 a6-direct/logs·a6-direct/logs-short·spike-logs 제외). 이후 RUN 파일 변경도 추적된다. 머지 전에 `git rm -r`로 정리한다(사용자가 직접).
+- Paseo 프로필 notes는 PC별 설정이다. 시작 전에 list_profiles로 team-lead·spec notes가 plugins/paseo-toolkit/references/presets.md의 두 notes와 문자 단위로 같은지 확인하고, 다르면 사용자 승인 뒤 profile-setup으로 등록한다(C6 전제, 다르면 실측이 새 규칙으로 라우팅되지 않는다).
+- 설치 경로: 경로 B는 그 PC의 체크아웃 경로로 마켓플레이스를 임시 전환한다(아래 절대 경로·설정 줄 번호는 원래 PC 기준이므로 그 PC에서 다시 조회). 브랜치가 원격에 있으므로 경로 A(마켓플레이스를 이 브랜치로 전환)도 가능하다 — 어느 쪽으로 할지 사용자에게 한 번 확인한다.
+- 원래 PC(D:\Paseo-Worktrees\27pr31l5\moody-wolf)의 설치본·마켓플레이스는 바꾸지 않았다. 되돌릴 것 없음.
+- RUN/.gset.py, RUN/a6-direct/evaluate.py는 상대 경로 기반이라 그대로 쓸 수 있다. evaluate.py는 로그 폴더를 스스로 만든다.
+
 ## 확정 상태
 - SPEC.md 재확정 sha256 a1acb66b465ab3db (description은 트리 원문 복제 대신 의미 보존 축약, A6는 실제 스킬 설치 직접 측정)
 - MILESTONE01-Tasks.md 재확정 607c4972a82a167f
