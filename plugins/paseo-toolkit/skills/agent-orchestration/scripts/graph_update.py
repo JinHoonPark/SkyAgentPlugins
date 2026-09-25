@@ -22,6 +22,8 @@ STATES = frozenset(("대기", "실행 중", "완료", "실패", "생략"))
 NODE_ID = re.compile(r"[A-Za-z][A-Za-z0-9_]*\Z")
 DEFINITION = re.compile(r"^\s*([A-Za-z][A-Za-z0-9_]*)\s*(?=[\[\{(])")
 EDGE = re.compile(r"^\s*([A-Za-z][A-Za-z0-9_]*)\s*((?:--|==|-\.)[^\r\n]*?)\s*([A-Za-z][A-Za-z0-9_]*)\s*$")
+CHAIN_NODE = re.compile(r"(?:-->|==>|-\.->|---|--o|--x)(?:\|[^|\r\n]*\|)?\s*"
+                        r"([A-Za-z][A-Za-z0-9_]*)\s*(?=(?:--|==|-\.))")
 
 
 class GraphError(Exception):
@@ -80,7 +82,21 @@ def _definitions(lines):
 def _edge_endpoints(line):
     match = EDGE.fullmatch(_plain(line))
     if match and any(arrow in match.group(2) for arrow in ("-->", "==>", "-.->", "---", "--o", "--x")):
-        return match.group(1), match.group(3)
+        middle = [found.group(1) for found in CHAIN_NODE.finditer(match.group(2))]
+        return match.group(1), *middle, match.group(3)
+    return None
+
+
+def _check_new_edge(edge):
+    endpoints = _edge_endpoints(edge)
+    if not endpoints or len(endpoints) != 2:
+        raise GraphError("잘못된 mermaid 관계선")
+
+
+def _edge_indent(lines):
+    for line in lines:
+        if _edge_endpoints(line):
+            return line[:len(line) - len(line.lstrip())]
     return None
 
 
@@ -92,6 +108,14 @@ def _mermaid(text):
     definitions = _definitions(lines[1:-1])
     if not definitions:
         raise GraphError("mermaid 노드 정의가 없습니다")
+    edges = set()
+    for line in lines[1:-1]:
+        if _edge_endpoints(line):
+            _check_new_edge(line)
+            edge = line.strip()
+            if edge in edges:
+                raise GraphError(f"이미 있는 관계선: {edge}")
+            edges.add(edge)
     return text, definitions
 
 
@@ -197,10 +221,21 @@ def add_row(path, raw_row, node_line, edges):
         _one_line(edge, "관계선")
         if not edge.strip() or edge.strip().startswith("```"):
             raise GraphError("잘못된 mermaid 관계선")
+        if _edge_endpoints(edge):
+            _check_new_edge(edge)
     lines, closing, end, rows, definitions, newline = _graph(path)
     if node_id in rows or node_id in definitions:
         raise GraphError(f"이미 있는 노드 ID: {node_id}")
-    additions = [node_line + newline] + [edge + newline for edge in edges]
+    existing = {_plain(line).strip() for line in lines[:closing] if _edge_endpoints(line)}
+    indent = _edge_indent(lines[:closing])
+    additions = [node_line + newline]
+    for edge in edges:
+        normalized = edge.strip()
+        if normalized in existing:
+            raise GraphError(f"이미 있는 관계선: {edge}")
+        existing.add(normalized)
+        prefix = indent if indent is not None else edge[:len(edge) - len(edge.lstrip())]
+        additions.append(prefix + normalized + newline)
     lines[closing:closing] = additions
     end += len(additions)
     if end and not lines[end - 1].endswith(("\r", "\n")):
@@ -263,7 +298,7 @@ def remove_edge(path, edge):
         raise GraphError("잘못된 mermaid 관계선")
     lines, closing, _, _, _, _ = _graph(path)
     for index in range(closing):
-        if _plain(lines[index]) == edge:
+        if _plain(lines[index]).strip() == edge.strip():
             del lines[index]
             _replace(path, "".join(lines))
             return
@@ -272,12 +307,13 @@ def remove_edge(path, edge):
 
 def add_edge(path, edge):
     _one_line(edge, "관계선")
-    if not _edge_endpoints(edge):
-        raise GraphError("잘못된 mermaid 관계선")
+    _check_new_edge(edge)
     lines, closing, _, _, _, newline = _graph(path)
-    if any(_plain(line) == edge for line in lines[:closing]):
+    if any(_plain(line).strip() == edge.strip() for line in lines[:closing]):
         raise GraphError(f"이미 있는 관계선: {edge}")
-    lines.insert(closing, edge + newline)
+    indent = _edge_indent(lines[:closing])
+    prefix = indent if indent is not None else edge[:len(edge) - len(edge.lstrip())]
+    lines.insert(closing, prefix + edge.strip() + newline)
     _replace(path, "".join(lines))
 
 
@@ -353,7 +389,7 @@ def run_cli(argv, stdin, stdout, stderr, plugin_root=None):
 
 
 def self_test(stdout, stderr):
-    """Exercise G1-G16 using disposable files outside the repository."""
+    """Exercise G1-G18 using disposable files outside the repository."""
     failures = []
     failed_calls = []
 
@@ -672,9 +708,87 @@ def self_test(stdout, stderr):
                 unchanged_failure(["create", str(target), "--mermaid-stdin"]
                                   + [part for row in sample_rows for part in ("--row", row)], target)
 
+            def test_g17():
+                old = "N1 -->|확정 요청| G1"
+                indented = "    " + old
+                target = base_graph("g17-remove")
+                before = target.read_text(encoding="utf-8")
+                newline = _newline(before)
+                check(indented + newline in before, "들여쓴 관계선 견본이 없습니다")
+                succeeded(invoke(["remove-edge", str(target), "--edge", old]))
+                check(target.read_text(encoding="utf-8") ==
+                      before.replace(indented + newline, "", 1),
+                      "들여쓰기 없는 인수로 관계선을 삭제하지 못했습니다")
+
+                target = base_graph("g17-add")
+                unchanged_failure(["add-edge", str(target), "--edge", old], target)
+                new = "N3 -->|재검토| N2"
+                succeeded(invoke(["add-edge", str(target), "--edge", new]))
+                check("    " + new + newline in target.read_text(encoding="utf-8"),
+                      "새 관계선이 기존 들여쓰기를 따르지 않았습니다")
+
+                target = base_graph("g17-add-row")
+                unchanged_failure(["add-row", str(target), "--row", new_row("N6"),
+                                  "--node-line", '    N6["새 노드"]', "--edge", old], target)
+                duplicate = "N6 --> N1"
+                unchanged_failure(["add-row", str(target), "--row", new_row("N6"),
+                                  "--node-line", '    N6["새 노드"]', "--edge", duplicate,
+                                  "--edge", "    " + duplicate], target)
+                succeeded(invoke(["add-row", str(target), "--row", new_row("N6"),
+                                  "--node-line", '    N6["새 노드"]', "--edge", duplicate]))
+                check("    " + duplicate + newline in target.read_text(encoding="utf-8"),
+                      "행 추가 관계선이 기존 들여쓰기를 따르지 않았습니다")
+
+                directory = area("g17-create")
+                source = directory / "mermaid.md"
+                source.write_text(basic_mermaid.replace(indented + newline,
+                                  indented + newline + old + newline, 1), encoding="utf-8")
+                target = directory / "GRAPH.md"
+                rejected(invoke(["create", str(target), "--mermaid-file", str(source)]
+                                + [part for row in sample_rows for part in ("--row", row)]))
+                check(not target.exists(), "중복 관계선으로 GRAPH.md가 만들어졌습니다")
+
+            def test_g18():
+                chain = "N1 --> N2 --> N3"
+                directory = area("g18-create")
+                source = directory / "mermaid.md"
+                source.write_text(basic_mermaid.replace("\n```", "\n    " + chain + "\n```", 1),
+                                  encoding="utf-8")
+                target = directory / "GRAPH.md"
+                rejected(invoke(["create", str(target), "--mermaid-file", str(source)]
+                                + [part for row in sample_rows for part in ("--row", row)]))
+                check(not target.exists(), "연쇄 관계선으로 GRAPH.md가 만들어졌습니다")
+
+                target = base_graph("g18-add-row")
+                unchanged_failure(["add-row", str(target), "--row", new_row("N6"),
+                                  "--node-line", '    N6["새 노드"]',
+                                  "--edge", "N6 --> N2 --> N3"], target)
+                target = base_graph("g18-add-edge")
+                unchanged_failure(["add-edge", str(target), "--edge", chain], target)
+                unchanged_failure(["add-edge", str(target), "--edge",
+                                  "N1 -->|확정| N2 -->|통과| N3"], target)
+
+                target = base_graph("g18-remove-node")
+                before = target.read_text(encoding="utf-8")
+                newline = _newline(before)
+                marker = "```" + newline + newline + HEADER
+                legacy = "    " + chain + newline
+                check(marker in before, "기존 연쇄 관계선 삽입 위치가 없습니다")
+                target.write_text(before.replace(marker, legacy + marker, 1), encoding="utf-8")
+                succeeded(invoke(["remove-node", str(target), "N2"]))
+                check(legacy not in target.read_text(encoding="utf-8"),
+                      "가운데 노드를 참조하는 기존 연쇄 관계선이 남았습니다")
+
+                target = base_graph("g18-remove-edge")
+                target.write_text(before.replace(marker, legacy + marker, 1), encoding="utf-8")
+                succeeded(invoke(["remove-edge", str(target), "--edge", chain]))
+                check(target.read_text(encoding="utf-8") == before,
+                      "기존 연쇄 관계선을 직접 삭제하지 못했습니다")
+
             tests = (test_g1, test_g2, test_g3, test_g4, test_g5, test_g6,
                      test_g7, test_g8, test_g9, test_g10, test_g11,
-                     test_g12, test_g13, test_g14, test_g15, test_g16)
+                     test_g12, test_g13, test_g14, test_g15, test_g16,
+                     test_g17, test_g18)
             for number, test in enumerate(tests, 1):
                 try:
                     test()
