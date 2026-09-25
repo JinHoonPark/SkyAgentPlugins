@@ -127,6 +127,9 @@ flowchart TD
     G19 -->|확정| N98
     N99["[ N99 · 리뷰·검증 ]<br/>gpt-6-sol<br/>T18 최종 대조"]
     N98 -->|복원| N99
+    N100["[ N100 · 자문 ]<br/>gpt-6-astra<br/>5e833be 대비 개선·악화·우려 분석"]
+    N101["[ N101 · 리뷰·검증(사용자 지정 모델) ]<br/>claude-opus-5-5<br/>5e833be 대비 개선·악화·우려 분석"]
+    N102["[ N102 · 리뷰·검증 ]<br/>gpt-6-sol<br/>후속 스펙 입력 목록 독립 검토"]
 ```
 
 | 노드 ID | 종류 | 프로필 | 입력 | 결과 파일 | 합격 기준 | 진행 조건 | 워크스페이스 | 되돌리기 | 재시도 | 검토 라운드 | 게이트 | 상태 | agentId |
@@ -236,3 +239,6 @@ flowchart TD
 | G19 | 사용자 게이트 | — | N97 실패(settings.json 선언 불일치) | ~/.claude/settings.json extraKnownMarketplaces.sky-agent-plugins | 사용자 명시 승인과 승인 범위를 적었는지 확인한다 | N97 실패 | 공유(local) | 예 | 불가 | 해당 없음 | 사용자 원문 "1" · 선언 블록만 git 출처(https://github.com/JinHoonPark/SkyAgentPlugins.git)로 직접 편집 → Claude marketplace add 재실행 → Codex remove·add · 설치된 paseo-toolkit 0.12.0 유지 | 완료 | |
 | N98 | 워커 | 적응형 명령 실행 — settings.json 선언 수정 뒤 두 마켓플레이스 GitHub 복원(N97 워커 재사용) | G19 · nodes/N41.md · nodes/N97.failure.md | 저장소 밖 설정 / nodes/N98.md / nodes/N98.failure.md | 두 출처가 N41 전환 전 git 출처와 같고 설치 목록 ID·enabled·version이 유지됐는지 확인한다 | G19 확정 | 공유(local) | 예(G19 승인) | 불가 | 해당 없음 | — | 완료 | 8c7d4744-1251-436e-92ba-c6649d66358d |
 | N99 | 워커 | 리뷰·검증 — T18 최종 대조(수용 기준별 통과·실패·미검증과 수치 취합) | MILESTONE01-Tasks.md T18 · SPEC.md · GRAPH.md · nodes/ | nodes/N99.md / nodes/N99.failure.md | T18 완료 조건 항목별 판정·근거 경로·검증 명령 종료 코드·토큰 수치·한계·후속이 결과 파일에 있는지 확인한다 | N98 완료 | 공유(local) | 아니오 | 불가 | 해당 없음 | — | 완료 | 7c79157d-e40f-4994-b427-93d651d775f0 |
+| N100 | 워커 | 자문 — 621e94b 커밋분을 5e833be 대비 개선·악화·우려 분석(사용자 지시) | 사용자 지시 · SPEC.md · nodes/N99.md · git diff 5e833be 621e94b | nodes/N100.md / nodes/N100.failure.md | 개선점·(있으면)나빠진 점·우려점이 근거 파일:줄과 함께 결과 파일에 있는지 확인한다 | 커밋 621e94b | 공유(local) | 아니오 | 불가 | 해당 없음 | — | 완료 | d6b3d844-5f90-4ccb-a45a-f2fd2e55659d |
+| N101 | 워커 | 리뷰·검증(사용자 지정 opus 5.5 max) — 621e94b 커밋분을 5e833be 대비 개선·악화·우려 분석 | 사용자 지시 · SPEC.md · nodes/N99.md · git diff 5e833be 621e94b | nodes/N101.md / nodes/N101.failure.md | 개선점·(있으면)나빠진 점·우려점이 근거 파일:줄과 함께 결과 파일에 있는지 확인한다 | 커밋 621e94b | 공유(local) | 아니오 | 불가 | 해당 없음 | — | 완료 | d0087c0f-b871-493b-a7c3-6ef1cd852620 |
+| N102 | 워커 | 리뷰·검증 — 팀장 직접 작성 FOLLOWUPS.md 독립 검토 | 사용자 요청 원문 · nodes/N99.md · nodes/N100.md · nodes/N101.md | nodes/N102.md · round2 · round3 / nodes/N102.failure.md · round2·round3.failure.md | 결과 파일 첫 줄 판정과 누락·근거 불일치 지적이 있는지 확인한다 | 팀장 직접 작성 완료 | 공유(local) | 아니오 | 불가 | 상한 3 · 사용 3 | — | 완료 | 2225d51a-4a19-4ddf-8cea-ff60192c1f28 |
