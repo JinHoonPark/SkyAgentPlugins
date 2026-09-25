@@ -1,0 +1,3 @@
+rule-audit.md -text
+rule-audit.py -text
+link-audit.py -text

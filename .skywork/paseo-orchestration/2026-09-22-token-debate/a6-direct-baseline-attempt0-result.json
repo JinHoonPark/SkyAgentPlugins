@@ -1,0 +1,510 @@
+{
+  "skill_name": "agent-orchestration",
+  "description": "팀장은 모든 작업 요청에 착수하기 전에 반드시 이 스킬을 읽고 적용한다. \"조회해줘\", \"고쳐줘\"처럼 할 일만 적힌 요청은 전부 이 스킬의 위임 대상이다. \"브레인스토밍하자\", \"아이디어 좀 내보자\", \"뭘 만들면 좋을까\", \"방향 좀 잡아줘\"처럼 무엇을 할지 아직 정해지지 않은 요청도 이 스킬이 받아 브레인스토밍 진입을 먼저 묻는다. 예외는 사용자가 팀장을 주어로 지목해 \"네가 직접 해\", \"팀장이 직접 처리해\"라고 지시한 경우뿐이다. 이 스킬을 통한 위임은 사용자의 상시 요청이므로 위임 여부를 다시 묻지 않는다. 라우팅은 팀장만 수행하며, 워커는 다시 위임하지 않는다.",
+  "measurement": "direct project skill first tool",
+  "model_requested": "claude-opus-5-5",
+  "init_models": {
+    "claude-opus-5-5": 26
+  },
+  "target_skill_loaded_all": true,
+  "installed_plugin_absent_all": true,
+  "init_skills_first": [
+    "agent-orchestration",
+    "deep-research",
+    "design",
+    "design-sync",
+    "dataviz",
+    "update-config",
+    "verify",
+    "debug",
+    "code-review",
+    "simplify",
+    "batch",
+    "fewer-permission-prompts",
+    "doctor",
+    "loop",
+    "schedule",
+    "claude-api",
+    "workflow-authoring",
+    "run",
+    "run-skill-generator"
+  ],
+  "call_count": 26,
+  "temp_paths": [
+    "C:\\Users\\magedoga\\AppData\\Local\\Temp\\skill-trigger-eval-direct-5dsktpz2",
+    "C:\\Users\\magedoga\\AppData\\Local\\Temp\\skill-trigger-eval-direct-88fkayfc",
+    "C:\\Users\\magedoga\\AppData\\Local\\Temp\\skill-trigger-eval-direct-o3do685e",
+    "C:\\Users\\magedoga\\AppData\\Local\\Temp\\skill-trigger-eval-direct-2_95djcd",
+    "C:\\Users\\magedoga\\AppData\\Local\\Temp\\skill-trigger-eval-direct-b6vw3kjf",
+    "C:\\Users\\magedoga\\AppData\\Local\\Temp\\skill-trigger-eval-direct-s3bc7y7y",
+    "C:\\Users\\magedoga\\AppData\\Local\\Temp\\skill-trigger-eval-direct-zb7wvm6m",
+    "C:\\Users\\magedoga\\AppData\\Local\\Temp\\skill-trigger-eval-direct-nc1iod1h",
+    "C:\\Users\\magedoga\\AppData\\Local\\Temp\\skill-trigger-eval-direct-mthp9brr",
+    "C:\\Users\\magedoga\\AppData\\Local\\Temp\\skill-trigger-eval-direct-wmgev6pp",
+    "C:\\Users\\magedoga\\AppData\\Local\\Temp\\skill-trigger-eval-direct-hjtdjk9m",
+    "C:\\Users\\magedoga\\AppData\\Local\\Temp\\skill-trigger-eval-direct-607fbc8p",
+    "C:\\Users\\magedoga\\AppData\\Local\\Temp\\skill-trigger-eval-direct-lcb2_c01",
+    "C:\\Users\\magedoga\\AppData\\Local\\Temp\\skill-trigger-eval-direct-ini468yd",
+    "C:\\Users\\magedoga\\AppData\\Local\\Temp\\skill-trigger-eval-direct-cgdu0z4r",
+    "C:\\Users\\magedoga\\AppData\\Local\\Temp\\skill-trigger-eval-direct-31aydw1f",
+    "C:\\Users\\magedoga\\AppData\\Local\\Temp\\skill-trigger-eval-direct-qvhpy9ao",
+    "C:\\Users\\magedoga\\AppData\\Local\\Temp\\skill-trigger-eval-direct-3i78l4m3",
+    "C:\\Users\\magedoga\\AppData\\Local\\Temp\\skill-trigger-eval-direct-1jmdxp1s",
+    "C:\\Users\\magedoga\\AppData\\Local\\Temp\\skill-trigger-eval-direct-jjo3e3vj",
+    "C:\\Users\\magedoga\\AppData\\Local\\Temp\\skill-trigger-eval-direct-h9ki31hs",
+    "C:\\Users\\magedoga\\AppData\\Local\\Temp\\skill-trigger-eval-direct-mix3i3sn",
+    "C:\\Users\\magedoga\\AppData\\Local\\Temp\\skill-trigger-eval-direct-32owiqix",
+    "C:\\Users\\magedoga\\AppData\\Local\\Temp\\skill-trigger-eval-direct-a36mirde",
+    "C:\\Users\\magedoga\\AppData\\Local\\Temp\\skill-trigger-eval-direct-yyyq60rz",
+    "C:\\Users\\magedoga\\AppData\\Local\\Temp\\skill-trigger-eval-direct-9kvbed31"
+  ],
+  "results": [
+    {
+      "query": "설정 오류 조사 작업은 워커에게 맡겨줘",
+      "should_trigger": true,
+      "trigger_rate": 1.0,
+      "triggers": 1,
+      "runs": 1,
+      "pass": true,
+      "first_tool_names": [
+        "Skill"
+      ],
+      "first_tool_input_summaries": [
+        "{\"args\": \"설정 오류 조사 작업은 워커에게 맡겨줘\", \"skill\": \"agent-orchestration\"}"
+      ],
+      "run_ids": [
+        "baseline-q01-r1"
+      ]
+    },
+    {
+      "query": "이 문서 정리 작업을 담당 워커에게 배정해줘",
+      "should_trigger": true,
+      "trigger_rate": 1.0,
+      "triggers": 1,
+      "runs": 1,
+      "pass": true,
+      "first_tool_names": [
+        "Skill"
+      ],
+      "first_tool_input_summaries": [
+        "{\"skill\": \"agent-orchestration\"}"
+      ],
+      "run_ids": [
+        "baseline-q02-r1"
+      ]
+    },
+    {
+      "query": "이 에러 원인 찾아줘",
+      "should_trigger": true,
+      "trigger_rate": 1.0,
+      "triggers": 1,
+      "runs": 1,
+      "pass": true,
+      "first_tool_names": [
+        "Skill"
+      ],
+      "first_tool_input_summaries": [
+        "{\"args\": \"이 에러 원인 찾아줘\", \"skill\": \"agent-orchestration\"}"
+      ],
+      "run_ids": [
+        "baseline-q03-r1"
+      ]
+    },
+    {
+      "query": "설정값이 어디서 바뀌는지 관련 파일을 찾아 읽고 알려줘",
+      "should_trigger": true,
+      "trigger_rate": 1.0,
+      "triggers": 1,
+      "runs": 1,
+      "pass": true,
+      "first_tool_names": [
+        "Skill"
+      ],
+      "first_tool_input_summaries": [
+        "{\"args\": \"설정값이 어디서 바뀌는지 관련 파일을 찾아 읽고 알려줘\", \"skill\": \"agent-orchestration\"}"
+      ],
+      "run_ids": [
+        "baseline-q04-r1"
+      ]
+    },
+    {
+      "query": "이 빌드 로그 분석해줘",
+      "should_trigger": true,
+      "trigger_rate": 1.0,
+      "triggers": 1,
+      "runs": 1,
+      "pass": true,
+      "first_tool_names": [
+        "Skill"
+      ],
+      "first_tool_input_summaries": [
+        "{\"args\": \"이 빌드 로그 분석해줘\", \"skill\": \"agent-orchestration\"}"
+      ],
+      "run_ids": [
+        "baseline-q05-r1"
+      ]
+    },
+    {
+      "query": "`test.log` 전체를 읽고 실패 원인을 분석해줘",
+      "should_trigger": true,
+      "trigger_rate": 1.0,
+      "triggers": 1,
+      "runs": 1,
+      "pass": true,
+      "first_tool_names": [
+        "Skill"
+      ],
+      "first_tool_input_summaries": [
+        "{\"args\": \"test.log 전체를 읽고 실패 원인을 분석해줘\", \"skill\": \"agent-orchestration\"}"
+      ],
+      "run_ids": [
+        "baseline-q06-r1"
+      ]
+    },
+    {
+      "query": "docs/ 아래 30개 파일 링크 통일해줘",
+      "should_trigger": true,
+      "trigger_rate": 1.0,
+      "triggers": 1,
+      "runs": 1,
+      "pass": true,
+      "first_tool_names": [
+        "Skill"
+      ],
+      "first_tool_input_summaries": [
+        "{\"args\": \"docs/ 아래 30개 파일 링크 통일해줘\", \"skill\": \"agent-orchestration\"}"
+      ],
+      "run_ids": [
+        "baseline-q07-r1"
+      ]
+    },
+    {
+      "query": "`a.py`, `b.py`, `c.py`, `d.py`, `e.py`, `f.py`의 헤더를 같은 형식으로 고쳐줘",
+      "should_trigger": true,
+      "trigger_rate": 1.0,
+      "triggers": 1,
+      "runs": 1,
+      "pass": true,
+      "first_tool_names": [
+        "Skill"
+      ],
+      "first_tool_input_summaries": [
+        "{\"skill\": \"agent-orchestration\"}"
+      ],
+      "run_ids": [
+        "baseline-q08-r1"
+      ]
+    },
+    {
+      "query": "`cache.py`에 만료 정책을 설계하고 구현해줘",
+      "should_trigger": true,
+      "trigger_rate": 1.0,
+      "triggers": 1,
+      "runs": 1,
+      "pass": true,
+      "first_tool_names": [
+        "Skill"
+      ],
+      "first_tool_input_summaries": [
+        "{\"args\": \"cache.py에 만료 정책을 설계하고 구현해줘\", \"skill\": \"agent-orchestration\"}"
+      ],
+      "run_ids": [
+        "baseline-q09-r1"
+      ]
+    },
+    {
+      "query": "`auth.py`의 새 정책 설계안을 작성하고, 구현한 다음 테스트 결과도 정리해줘",
+      "should_trigger": true,
+      "trigger_rate": 1.0,
+      "triggers": 1,
+      "runs": 1,
+      "pass": true,
+      "first_tool_names": [
+        "Skill"
+      ],
+      "first_tool_input_summaries": [
+        "{\"args\": \"auth.py의 새 정책 설계안을 작성하고, 구현한 다음 테스트 결과도 정리해줘\", \"skill\": \"agent-orchestration\"}"
+      ],
+      "run_ids": [
+        "baseline-q10-r1"
+      ]
+    },
+    {
+      "query": "`a.py` 고치고 리뷰 에이전트한테 독립 검토 받아줘",
+      "should_trigger": true,
+      "trigger_rate": 1.0,
+      "triggers": 1,
+      "runs": 1,
+      "pass": true,
+      "first_tool_names": [
+        "Skill"
+      ],
+      "first_tool_input_summaries": [
+        "{\"args\": \"a.py 고치고 리뷰 에이전트한테 독립 검토 받아줘\", \"skill\": \"agent-orchestration\"}"
+      ],
+      "run_ids": [
+        "baseline-q11-r1"
+      ]
+    },
+    {
+      "query": "`b.py` 변경안을 다른 에이전트에게 독립 검토 맡겨줘",
+      "should_trigger": true,
+      "trigger_rate": 1.0,
+      "triggers": 1,
+      "runs": 1,
+      "pass": true,
+      "first_tool_names": [
+        "Skill"
+      ],
+      "first_tool_input_summaries": [
+        "{\"args\": \"b.py 변경안을 다른 에이전트에게 독립 검토 맡겨줘\", \"skill\": \"agent-orchestration\"}"
+      ],
+      "run_ids": [
+        "baseline-q12-r1"
+      ]
+    },
+    {
+      "query": "네가 직접 build 폴더 지워줘",
+      "should_trigger": true,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": false,
+      "first_tool_names": [
+        "PowerShell"
+      ],
+      "first_tool_input_summaries": [
+        "{\"command\": \"if (Test-Path build) { Get-ChildItem build -Recurse -Force | Measure-Object | Select-Object Count; Get-ChildItem build -Force | Select-Object Mode, Name } else { \\\"build 폴더 없음\\\"; Get-ChildItem -Force | Select-Object Mode, Name }\", \"description\": \"build 폴더 존재 여부와 내용 확인\"}"
+      ],
+      "run_ids": [
+        "baseline-q13-r1"
+      ]
+    },
+    {
+      "query": "현재 브랜치에 git 커밋해줘",
+      "should_trigger": true,
+      "trigger_rate": 1.0,
+      "triggers": 1,
+      "runs": 1,
+      "pass": true,
+      "first_tool_names": [
+        "Skill"
+      ],
+      "first_tool_input_summaries": [
+        "{\"args\": \"현재 브랜치에 git 커밋해줘\", \"skill\": \"agent-orchestration\"}"
+      ],
+      "run_ids": [
+        "baseline-q14-r1"
+      ]
+    },
+    {
+      "query": "네가 직접 브레인스토밍하자",
+      "should_trigger": true,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": false,
+      "first_tool_names": [
+        null
+      ],
+      "first_tool_input_summaries": [
+        null
+      ],
+      "run_ids": [
+        "baseline-q15-r1"
+      ]
+    },
+    {
+      "query": "이 기능 아이디어 좀 내보자",
+      "should_trigger": true,
+      "trigger_rate": 1.0,
+      "triggers": 1,
+      "runs": 1,
+      "pass": true,
+      "first_tool_names": [
+        "Skill"
+      ],
+      "first_tool_input_summaries": [
+        "{\"skill\": \"agent-orchestration\"}"
+      ],
+      "run_ids": [
+        "baseline-q16-r1"
+      ]
+    },
+    {
+      "query": "`parseConfig` 어디 있어?",
+      "should_trigger": false,
+      "trigger_rate": 1.0,
+      "triggers": 1,
+      "runs": 1,
+      "pass": false,
+      "first_tool_names": [
+        "Skill"
+      ],
+      "first_tool_input_summaries": [
+        "{\"skill\": \"agent-orchestration\"}"
+      ],
+      "run_ids": [
+        "baseline-q17-r1"
+      ]
+    },
+    {
+      "query": "검색식 한 번으로 `logger.info`의 정의 위치만 찾아줘",
+      "should_trigger": false,
+      "trigger_rate": 1.0,
+      "triggers": 1,
+      "runs": 1,
+      "pass": false,
+      "first_tool_names": [
+        "Skill"
+      ],
+      "first_tool_input_summaries": [
+        "{\"skill\": \"agent-orchestration\"}"
+      ],
+      "run_ids": [
+        "baseline-q18-r1"
+      ]
+    },
+    {
+      "query": "`cache.py`의 캐시 설계 설명해줘",
+      "should_trigger": false,
+      "trigger_rate": 1.0,
+      "triggers": 1,
+      "runs": 1,
+      "pass": false,
+      "first_tool_names": [
+        "Skill"
+      ],
+      "first_tool_input_summaries": [
+        "{\"args\": \"cache.py의 캐시 설계 설명해줘\", \"skill\": \"agent-orchestration\"}"
+      ],
+      "run_ids": [
+        "baseline-q19-r1"
+      ]
+    },
+    {
+      "query": "`a.py`, `b.py`, `c.py`, `d.py`, `e.py`를 읽고 각 파일의 역할을 한 줄씩 설명해줘",
+      "should_trigger": false,
+      "trigger_rate": 1.0,
+      "triggers": 1,
+      "runs": 1,
+      "pass": false,
+      "first_tool_names": [
+        "Skill"
+      ],
+      "first_tool_input_summaries": [
+        "{\"skill\": \"agent-orchestration\"}"
+      ],
+      "run_ids": [
+        "baseline-q20-r1"
+      ]
+    },
+    {
+      "query": "`config.py` 내용을 읽고 설정 흐름만 설명해줘",
+      "should_trigger": false,
+      "trigger_rate": 1.0,
+      "triggers": 1,
+      "runs": 1,
+      "pass": false,
+      "first_tool_names": [
+        "Skill"
+      ],
+      "first_tool_input_summaries": [
+        "{\"args\": \"config.py 내용을 읽고 설정 흐름만 설명해줘\", \"skill\": \"agent-orchestration\"}"
+      ],
+      "run_ids": [
+        "baseline-q21-r1"
+      ]
+    },
+    {
+      "query": "`pytest` 실행 후 종료 코드만 알려줘",
+      "should_trigger": false,
+      "trigger_rate": 1.0,
+      "triggers": 1,
+      "runs": 1,
+      "pass": false,
+      "first_tool_names": [
+        "Skill"
+      ],
+      "first_tool_input_summaries": [
+        "{\"args\": \"pytest 실행 후 종료 코드만 알려줘\", \"skill\": \"agent-orchestration\"}"
+      ],
+      "run_ids": [
+        "baseline-q22-r1"
+      ]
+    },
+    {
+      "query": "`npm run build`가 통과했는지만 확인해줘",
+      "should_trigger": false,
+      "trigger_rate": 1.0,
+      "triggers": 1,
+      "runs": 1,
+      "pass": false,
+      "first_tool_names": [
+        "Skill"
+      ],
+      "first_tool_input_summaries": [
+        "{\"args\": \"npm run build가 통과했는지만 확인해줘\", \"skill\": \"agent-orchestration\"}"
+      ],
+      "run_ids": [
+        "baseline-q23-r1"
+      ]
+    },
+    {
+      "query": "안녕하세요",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true,
+      "first_tool_names": [
+        null
+      ],
+      "first_tool_input_summaries": [
+        null
+      ],
+      "run_ids": [
+        "baseline-q24-r1"
+      ]
+    },
+    {
+      "query": "파이썬 딕셔너리와 리스트 차이를 짧게 설명해줘",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true,
+      "first_tool_names": [
+        null
+      ],
+      "first_tool_input_summaries": [
+        null
+      ],
+      "run_ids": [
+        "baseline-q25-r1"
+      ]
+    },
+    {
+      "query": "네가 직접 이 에러 원인 찾아줘",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true,
+      "first_tool_names": [
+        "PowerShell"
+      ],
+      "first_tool_input_summaries": [
+        "{\"command\": \"Get-ChildItem -Force -Recurse -Depth 2 | Select-Object -First 50 FullName, Length\", \"description\": \"작업 디렉터리 파일 목록 확인\"}"
+      ],
+      "run_ids": [
+        "baseline-q26-r1"
+      ]
+    }
+  ],
+  "summary": {
+    "total": 26,
+    "passed": 17,
+    "failed": 9
+  }
+}
