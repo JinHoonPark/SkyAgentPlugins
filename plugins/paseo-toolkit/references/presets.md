@@ -323,7 +323,7 @@ provider도 이 표로 세 등급이 모두 채워지므로, 모델이 적다는
 
 ## `notes` 길이
 
-`notes`가 Unicode 문자 160자를 넘으면 `../scripts/manage_profiles.py`의
+`notes`의 용도 부분(`| ★ 지침` 앞)이 Unicode 문자 160자를 넘으면 `../scripts/manage_profiles.py`의
 `MAX_NOTES_UNICODE_CHARS`(160자) 검사에 걸린다. 이것은 **경고이며 등록을 막는 오류가 아니다.**
 넘겼을 때는 한도를 늘리거나 문장을 잘라 저장하지 않고, 의미를 보존한 축약안을 사용자에게
 제시한다.

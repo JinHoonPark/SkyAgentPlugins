@@ -142,6 +142,9 @@ KNOWN_MODE_IDS = {
 # Python's len() counts Unicode code points.  That is the deterministic
 # definition used for this command's "Unicode character" threshold.
 MAX_NOTES_UNICODE_CHARS = 160
+# Only the routing part before this marker counts toward the limit; the
+# guidance after it is the profile's worker rules and is not used for routing.
+NOTES_GUIDANCE_MARKER = "| ★ 지침"
 NOTES_LENGTH_WARNING_REASON = (
     "짧은 두 문장 정도를 허용하면서 list_profiles 전체 반환 시 선택 정확도를 "
     "지키기 위함"
@@ -763,10 +766,15 @@ def validate_profile_shape(profiles: list[Any], problems: Problems) -> list[Cand
                     "notes가 있으면 문자열이어야 합니다.",
                     f"{profile_path}.notes",
                 )
-            elif len(notes) > MAX_NOTES_UNICODE_CHARS:
+            elif len(
+                routing := notes.split(NOTES_GUIDANCE_MARKER, 1)[0].rstrip()
+                if NOTES_GUIDANCE_MARKER in notes
+                else notes
+            ) > MAX_NOTES_UNICODE_CHARS:
                 problems.warning(
                     "NOTES_LENGTH",
-                    f"notes는 Unicode 문자 {len(notes)}자입니다. {MAX_NOTES_UNICODE_CHARS}자를 초과하면 "
+                    f"notes의 용도 부분(`{NOTES_GUIDANCE_MARKER}` 앞)은 Unicode 문자 {len(routing)}자입니다. "
+                    f"{MAX_NOTES_UNICODE_CHARS}자를 초과하면 "
                     f"{NOTES_LENGTH_WARNING_REASON}.",
                     f"{profile_path}.notes",
                 )
