@@ -10,7 +10,11 @@
 
 ## 그래프 갱신 오류
 
-`GRAPH.md`의 열 변경은 스킬 디렉터리에서 `python scripts/graph_update.py set {GRAPH.md 경로} {노드 ID} '열=값'`으로, 새 노드 행은 `add-row`, 최초 생성은 `create`로 기록한다(레벨 1·2의 기록 절).
+`python3`가 없으면 Python 명령을 `python`으로 실행한다.
+
+`GRAPH.md`의 열 변경은 스킬 디렉터리에서 `python3 scripts/graph_update.py set {GRAPH.md 경로} {노드 ID} '열=값'`으로, 새 노드 행은 `add-row`, 노드 삭제는 `remove-node`, 관계선 삭제·추가는 `remove-edge`·`add-edge`, 최초 생성은 `create`로 기록한다(레벨 1·2의 기록 절).
+`set`에서 `대상 노드 없음`이 나오면 표 행을 확인한다. `remove-node`에서 같은 진단이 나오면 표 행과 mermaid 정의를 확인한다. `remove-edge`의 `대상 관계선 없음`과 `add-edge`의 `이미 있는 관계선`은 지정한 관계선 줄을 확인한다.
+`create`에서 `이미 있는 경로`가 나오면 기존 `GRAPH.md`를 덮어쓰지 않는다. 부모 디렉터리가 없으면 `create`로 생성한다.
 스크립트 진단에 교정 근거가 있을 때만 인수를 고쳐 재호출한다. 같은 진단이 반복되거나 기록과 실제 상태가 어긋나면 본문 「팀장 발화」의 실패 게이트 3·4로 처리한다.
 필요한 기록 없이 다음 워커를 기동하지 않는다. 스크립트를 실행할 수 없는 환경에서만 같은 형식·내용·시점으로 직접 편집한다.
 

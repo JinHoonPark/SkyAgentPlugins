@@ -200,12 +200,11 @@ claude `plan`은 코드 수정과 도구 실행을 막아 **문서 산출까지 
 
 ### 1-5. `notes` 쓰는 법
 
-`notes`의 UI 라벨은 "When to use"(한국어 UI에서는 "사용 시점")다. 팀장이 프로필을 고를 때만
-쓰이고 **워커 에이전트에는 전달되지 않는다.** 프로필 스키마에는 의도적으로 system prompt가
-없다.
+`notes`의 UI 라벨은 "When to use"(한국어 UI에서는 "사용 시점")다. 팀장이 프로필을 고를 때
+쓰고, 워커 브리핑 첫 줄 `너는 워커다. 프로필: {이름} — {notes 원문}`으로 원문을 워커에게
+전달한다. 프로필 스키마에는 의도적으로 system prompt가 없다.
 
-따라서 `notes`에 "~하지 말 것", "~에게 넘길 것" 같은 워커 행동 규칙을 쓰지 않는다. 그런
-문구는 아무 동작도 강제하지 못한다. 실제 워커 제약은 팀장이 `create_agent`에 주는
+`notes`에 "~하지 말 것", "~에게 넘길 것" 같은 워커 행동 규칙을 쓰지 않는다. 워커 제약은 팀장이 `create_agent`에 주는
 `initialPrompt`, 저장소의 `CLAUDE.md`/`AGENTS.md`, 데몬 전역의 `daemon.appendSystemPrompt`
 중 하나에 둔다.
 

@@ -23,10 +23,12 @@
 
 ## `BRAINSTORMING.md`
 
+`python3`가 없으면 Python 명령을 `python`으로 실행한다.
+
 - 경로는 5절의 실행 디렉터리 `.skywork/paseo-orchestration/{YYYY-MM-DD}-{슬러그}/` 바로 아래
   `BRAINSTORMING.md`다. 이 시점에 그 디렉터리를 정하고, 아래 게이트를 통과해 짜는 그래프는
-  **같은 디렉터리**에 `python scripts/graph_update.py create`로 `GRAPH.md`를 쓴다.
-- 내용이 이 세션 대화뿐이므로 **팀장이 직접 쓴다**(SKILL.md 「리더가 직접 하는 일」 4).
+  **같은 디렉터리**에 `python3 scripts/graph_update.py create`로 `GRAPH.md`를 쓴다.
+- 내용이 이 세션 대화뿐이므로 **팀장이 직접 쓴다**(SKILL.md 「리더가 직접 하는 일」).
 - 노드 산출물이 아니다. 노드 ID를 붙이지 않고, `GRAPH.md` 노드 표에 행을 만들지 않으며,
   실패 보고 경로도 두지 않는다.
 - 담는 것 — 풀려는 문제 / 나온 아이디어와 각각의 장단 / 사용자가 고른 방향 / 버린 선택지와

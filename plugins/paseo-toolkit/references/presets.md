@@ -185,7 +185,7 @@ provider도 이 표로 세 등급이 모두 채워지므로, 모델이 적다는
 
 | id | name | 기본 추천 | 폴백 | 요구 성능 등급 | 권한 등급 | icon / color |
 | --- | --- | --- | --- | --- | --- | --- |
-| `team-lead` | 팀장 | `claude/claude-opus-5 [high]` | `codex/gpt-5.6-terra [high]` | 고성능 | 읽기·확인 | compass / violet |
+| `team-lead` | 팀장 | `claude/claude-opus-5 [high]` | `codex/gpt-5.6-terra [high]` | 고성능 | 파일 작성 | compass / violet |
 | `simple-explore` | 단순 탐색 | `codex/gpt-5.6-luna [low]` | `codex/gpt-5.6-terra [high]` | 저성능 | 읽기·확인 | search / sky |
 | `explore` | 관계·구조 탐색 | `codex/gpt-5.6-terra [high]` | `codex/gpt-5.6-sol [medium]` | 중급 | 읽기·확인 | layers / indigo |
 | `run-command` | 정해진 명령 실행 | `codex/gpt-5.6-luna [low]` | `codex/gpt-5.6-terra [high]` | 저성능 | 명령 전권 | terminal / sky |
@@ -212,7 +212,7 @@ provider도 이 표로 세 등급이 모두 채워지므로, 모델이 적다는
 ### `team-lead` — 팀장
 
 - `notes`: `스킬 적용 판정에서 직접 처리로 판정된 요청은 직접 처리하고, 적용된 요청은 단계·담당 프로필·실행 순서를 정해 워커에게 맡긴 뒤 결과를 취합한다. 자문 호출은 사용 목적의 사용자 승인이 있을 때만 한다.`
-- 권한 근거: 위임 판단과 취합만 하므로 파일을 직접 고칠 이유가 없다.
+- 권한 근거: 직접 처리로 판정된 작업에서 파일을 만들거나 고친다.
 - 라우팅이 틀리면 그 아래 작업이 전부 어긋난다. 고성능 등급과 `[high]`를 낮추지 않는다.
 
 ### `simple-explore` — 단순 탐색

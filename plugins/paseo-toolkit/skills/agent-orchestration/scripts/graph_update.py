@@ -21,6 +21,7 @@ SEPARATOR = "| " + " | ".join(["---"] * len(COLUMNS)) + " |"
 STATES = frozenset(("대기", "실행 중", "완료", "실패", "생략"))
 NODE_ID = re.compile(r"[A-Za-z][A-Za-z0-9_]*\Z")
 DEFINITION = re.compile(r"^\s*([A-Za-z][A-Za-z0-9_]*)\s*(?=[\[\{(])")
+EDGE = re.compile(r"^\s*([A-Za-z][A-Za-z0-9_]*)\s*((?:--|==|-\.)[^\r\n]*?)\s*([A-Za-z][A-Za-z0-9_]*)\s*$")
 
 
 class GraphError(Exception):
@@ -74,6 +75,13 @@ def _definitions(lines):
                 raise GraphError(f"중복된 mermaid 노드 정의: {node_id}")
             found.add(node_id)
     return found
+
+
+def _edge_endpoints(line):
+    match = EDGE.fullmatch(_plain(line))
+    if match and any(arrow in match.group(2) for arrow in ("-->", "==>", "-.->", "---", "--o", "--x")):
+        return match.group(1), match.group(3)
+    return None
 
 
 def _mermaid(text):
@@ -145,6 +153,7 @@ def create(path, mermaid_text, raw_rows, plugin_root):
     content = (f"버전 : {version}{newline}{newline}{mermaid_text}{newline}{newline}"
                f"{HEADER}{newline}{SEPARATOR}{newline}"
                + "".join(row + newline for row in rows.values()))
+    path.parent.mkdir(parents=True, exist_ok=True)
     _write_new(path, content)
     return len(rows), warning
 
@@ -218,8 +227,8 @@ def set_cells(path, node_id, assignments):
         changes[name] = value
     if not changes:
         raise GraphError("변경할 열을 하나 이상 지정해야 합니다")
-    lines, _, _, rows, definitions, _ = _graph(path)
-    if node_id not in rows or node_id not in definitions:
+    lines, _, _, rows, _, _ = _graph(path)
+    if node_id not in rows:
         raise GraphError(f"대상 노드 없음: {node_id}")
     index = rows[node_id]
     original = lines[index]
@@ -231,6 +240,45 @@ def set_cells(path, node_id, assignments):
     lines[index] = "|".join(parts) + ending
     _replace(path, "".join(lines))
     return len(changes)
+
+
+def remove_node(path, node_id):
+    if not NODE_ID.fullmatch(node_id):
+        raise GraphError(f"잘못된 노드 ID: {node_id}")
+    lines, closing, _, rows, definitions, _ = _graph(path)
+    if node_id not in rows and node_id not in definitions:
+        raise GraphError(f"대상 노드 없음: {node_id}")
+    remove = {rows[node_id]} if node_id in rows else set()
+    for index in range(closing):
+        definition = DEFINITION.match(_plain(lines[index]))
+        endpoints = _edge_endpoints(lines[index])
+        if (definition and definition.group(1) == node_id) or (endpoints and node_id in endpoints):
+            remove.add(index)
+    _replace(path, "".join(line for index, line in enumerate(lines) if index not in remove))
+
+
+def remove_edge(path, edge):
+    _one_line(edge, "관계선")
+    if not _edge_endpoints(edge):
+        raise GraphError("잘못된 mermaid 관계선")
+    lines, closing, _, _, _, _ = _graph(path)
+    for index in range(closing):
+        if _plain(lines[index]) == edge:
+            del lines[index]
+            _replace(path, "".join(lines))
+            return
+    raise GraphError(f"대상 관계선 없음: {edge}")
+
+
+def add_edge(path, edge):
+    _one_line(edge, "관계선")
+    if not _edge_endpoints(edge):
+        raise GraphError("잘못된 mermaid 관계선")
+    lines, closing, _, _, _, newline = _graph(path)
+    if any(_plain(line) == edge for line in lines[:closing]):
+        raise GraphError(f"이미 있는 관계선: {edge}")
+    lines.insert(closing, edge + newline)
+    _replace(path, "".join(lines))
 
 
 def _parser():
@@ -247,6 +295,15 @@ def _parser():
     addition.add_argument("--row", required=True)
     addition.add_argument("--node-line", required=True)
     addition.add_argument("--edge", action="append", default=[], help="관계선; 반복 가능")
+    removal = commands.add_parser("remove-node", help="노드 정의·끝점 관계선·표 행 삭제")
+    removal.add_argument("path", type=Path)
+    removal.add_argument("node_id")
+    edge_removal = commands.add_parser("remove-edge", help="지정 관계선 삭제")
+    edge_removal.add_argument("path", type=Path)
+    edge_removal.add_argument("--edge", required=True)
+    edge_addition = commands.add_parser("add-edge", help="관계선 추가")
+    edge_addition.add_argument("path", type=Path)
+    edge_addition.add_argument("--edge", required=True)
     change = commands.add_parser("set", help="기존 노드 행의 지정 열 변경")
     change.add_argument("path", type=Path)
     change.add_argument("node_id")
@@ -274,6 +331,15 @@ def run_cli(argv, stdin, stdout, stderr, plugin_root=None):
         elif args.command == "add-row":
             add_row(args.path, args.row, args.node_line, args.edge)
             print(f"행 추가: {args.path} ({_row(args.row)[0]})", file=stdout)
+        elif args.command == "remove-node":
+            remove_node(args.path, args.node_id)
+            print(f"노드 삭제: {args.path} ({args.node_id})", file=stdout)
+        elif args.command == "remove-edge":
+            remove_edge(args.path, args.edge)
+            print(f"관계선 삭제: {args.path} ({args.edge})", file=stdout)
+        elif args.command == "add-edge":
+            add_edge(args.path, args.edge)
+            print(f"관계선 추가: {args.path} ({args.edge})", file=stdout)
         else:
             count = set_cells(args.path, args.node_id, args.assignments)
             print(f"열 변경: {args.path} ({args.node_id}, {count}개 열)", file=stdout)
@@ -287,7 +353,7 @@ def run_cli(argv, stdin, stdout, stderr, plugin_root=None):
 
 
 def self_test(stdout, stderr):
-    """Exercise G1-G11 using disposable files outside the repository."""
+    """Exercise G1-G16 using disposable files outside the repository."""
     failures = []
     failed_calls = []
 
@@ -546,8 +612,69 @@ def self_test(stdout, stderr):
                 check(imported <= stdlib,
                       f"표준 라이브러리 밖 import: {sorted(imported - stdlib)}")
 
+            def test_g12():
+                target = base_graph("g12")
+                before = target.read_text(encoding="utf-8")
+                newline = _newline(before)
+                removed = ['    N1["[ N1 · 단순 탐색 ]<br/>gpt-5.6-luna<br/>UI 변경 파일 수집"]',
+                           '    N1 -->|확정 요청| G1', '    G1 -->|피드백| N1',
+                           '    N1 -->|통과| N2', '    N1 -->|통과| N3',
+                           '    N2 -->|피드백: 수정 필요, 잔여 2회| N1', sample_rows[0]]
+                succeeded(invoke(["remove-node", str(target), "N1"]))
+                expected = before
+                for line in removed:
+                    check(line + newline in expected, f"삭제 확인용 줄 없음: {line}")
+                    expected = expected.replace(line + newline, "", 1)
+                check(target.read_text(encoding="utf-8") == expected,
+                      "노드 정의·끝점 관계선·표 행 삭제 또는 다른 줄 보존 오류")
+
+            def test_g13():
+                target = base_graph("g13")
+                before = target.read_text(encoding="utf-8")
+                old = "    N1 -->|통과| N2"
+                new = "    N3 -->|재검토| N2"
+                newline = _newline(before)
+                succeeded(invoke(["remove-edge", str(target), "--edge", old]))
+                check(target.read_text(encoding="utf-8") == before.replace(old + newline, "", 1),
+                      "지정 관계선만 삭제하지 않았습니다")
+                succeeded(invoke(["add-edge", str(target), "--edge", new]))
+                expected = before.replace(old + newline, "", 1)
+                expected = expected.replace(f"```{newline}{newline}{HEADER}",
+                                            f"{new}{newline}```{newline}{newline}{HEADER}", 1)
+                check(target.read_text(encoding="utf-8") == expected,
+                      "새 관계선 추가 또는 다른 관계선 보존 오류")
+
+            def test_g14():
+                target = base_graph("g14")
+                before = target.read_text(encoding="utf-8")
+                newline = _newline(before)
+                definition = '    N2["[ N2 · 리뷰·검증 ]<br/>gpt-5.6-sol<br/>변경분 검토"]'
+                check(definition + newline in before, "정의 제거용 줄 없음")
+                before = before.replace(definition + newline, "", 1)
+                target.write_text(before, encoding="utf-8")
+                succeeded(invoke(["set", str(target), "N2", "상태=완료"]))
+                expected = before.replace(sample_rows[1],
+                                          sample_rows[1].replace("| 대기 |", "| 완료 |", 1), 1)
+                check(target.read_text(encoding="utf-8") == expected,
+                      "mermaid 정의 없는 표 행의 열 변경 실패")
+
+            def test_g15():
+                directory = area("g15")
+                target = directory / "nested" / "GRAPH.md"
+                succeeded(invoke(["create", str(target), "--mermaid-stdin"]
+                                 + [part for row in sample_rows for part in ("--row", row)],
+                                 basic_mermaid.encode("utf-8")))
+                check(target.is_file() and target.parent.is_dir(),
+                      "없는 부모 디렉터리 또는 GRAPH.md를 만들지 않았습니다")
+
+            def test_g16():
+                target = base_graph("g16")
+                unchanged_failure(["create", str(target), "--mermaid-stdin"]
+                                  + [part for row in sample_rows for part in ("--row", row)], target)
+
             tests = (test_g1, test_g2, test_g3, test_g4, test_g5, test_g6,
-                     test_g7, test_g8, test_g9, test_g10, test_g11)
+                     test_g7, test_g8, test_g9, test_g10, test_g11,
+                     test_g12, test_g13, test_g14, test_g15, test_g16)
             for number, test in enumerate(tests, 1):
                 try:
                     test()

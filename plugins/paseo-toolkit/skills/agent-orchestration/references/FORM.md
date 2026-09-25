@@ -263,9 +263,11 @@ flowchart TD
 
 ## 사용자 확정 게이트
 
+`python3`가 없으면 Python 명령을 `python`으로 실행한다.
+
 산출물 확정을 받아야 다음 단계로 넘어갈 때 낸다. 경로는 위 `경로 표기 규칙`을 따른다. **이
-출력을 낸 시점에 `python scripts/graph_update.py set`으로 `GRAPH.md`의 그 게이트 행 `상태`를 `실행 중`으로 바꾸고, 사용자가 확정하면
-`python scripts/graph_update.py set`으로 `완료`로 바꾼다.** 그 단계에 독립 검토 노드를 실제로 두었으면 검토 줄을 넣고, 두지 않았으면
+출력을 낸 시점에 `python3 scripts/graph_update.py set`으로 `GRAPH.md`의 그 게이트 행 `상태`를 `실행 중`으로 바꾸고, 사용자가 확정하면
+`python3 scripts/graph_update.py set`으로 `완료`로 바꾼다.** 그 단계에 독립 검토 노드를 실제로 두었으면 검토 줄을 넣고, 두지 않았으면
 넣지 않는다.
 
 ```text

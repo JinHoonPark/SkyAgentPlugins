@@ -6,10 +6,12 @@
 
 ## 점검·적용
 
+`python3`가 없으면 Python 명령을 `python`으로 실행한다.
+
 `--value`에 추가할 한 줄만 주고 실행한다. 그 줄이 이미 있으면 `alreadyPresent`가 참으로 오고 아무것도 하지 않는다. 그 사실을 알리고 끝낸다.
 
 ```text
-python scripts/append_system_prompt.py --value "추가할 한 줄"
+python3 scripts/append_system_prompt.py --value "추가할 한 줄"
 ```
 
 SKILL.md 8절의 명시 승인을 받은 뒤에만 같은 명령에 `--apply`를 붙인다. 백업·반영·reload·로그 재적재 확인과 실패 시 롤백은 스크립트가 한다.
@@ -19,5 +21,5 @@ SKILL.md 8절의 명시 승인을 받은 뒤에만 같은 명령에 `--apply`를
 되돌릴 때는 `--rollback`에 백업 경로를 준다. `--apply`가 없으면 이것도 dry-run이다.
 
 ```text
-python scripts/append_system_prompt.py --rollback "백업 경로" --apply
+python3 scripts/append_system_prompt.py --rollback "백업 경로" --apply
 ```

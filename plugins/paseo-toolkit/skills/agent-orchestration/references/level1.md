@@ -2,18 +2,23 @@
 
 ## 공통 `GRAPH.md` 기록
 
+`python3`가 없으면 Python 명령을 `python`으로 실행한다.
+
 레벨 1·2는 아래 `GRAPH.md` 형식과 기록 시점을 함께 쓴다.
 
 경로: 5절에서 정한 실행 디렉터리의 `GRAPH.md`
 결과 파일 규칙은 5절과 같다. 노드 표는 `노드 ID`·`종류`·`프로필`·`입력`·`결과 파일`·`합격 기준`·`진행 조건`·`워크스페이스`·`되돌리기`·`재시도`·`검토 라운드`·`게이트`·`상태`·`agentId`의 14열이다.
 
 스킬 디렉터리에서 UTF-8 mermaid 블록을 같은 도구 호출의 표준 입력으로 넘기며
-`python scripts/graph_update.py create {GRAPH.md 경로} --mermaid-stdin --row '{14열 노드 행}'`로 생성한다. 노드 행마다 `--row`를 반복한다.
-새 노드는 `python scripts/graph_update.py add-row {GRAPH.md 경로} --node-line '{mermaid 노드 정의 줄}' --edge '{관계선}' --row '{14열 노드 행}'`로 추가한다. 관계선마다 `--edge`를 반복하고 없으면 생략한다.
-열은 `python scripts/graph_update.py set {GRAPH.md 경로} {노드 ID} '상태=완료' 'agentId={ID}'`처럼 바꿀 `열=값`만 넘긴다. 각 갱신은 도구 호출 한 번이다.
+`python3 scripts/graph_update.py create {GRAPH.md 경로} --mermaid-stdin --row '{14열 노드 행}'`로 생성한다. 노드 행마다 `--row`를 반복한다.
+`create`는 없는 부모 디렉터리를 만들고 이미 있는 `GRAPH.md`는 거부한다.
+새 노드는 `python3 scripts/graph_update.py add-row {GRAPH.md 경로} --node-line '{mermaid 노드 정의 줄}' --edge '{관계선}' --row '{14열 노드 행}'`로 추가한다. 관계선마다 `--edge`를 반복하고 없으면 생략한다.
+승인된 노드 삭제는 `python3 scripts/graph_update.py remove-node {GRAPH.md 경로} {노드 ID}`로 기록한다. 노드 정의 줄·그 노드가 끝점인 관계선·표 행을 함께 지운다.
+승인된 관계선 삭제는 `python3 scripts/graph_update.py remove-edge {GRAPH.md 경로} --edge '{관계선}'`로, 추가는 `python3 scripts/graph_update.py add-edge {GRAPH.md 경로} --edge '{관계선}'`로 기록한다. 관계선 교체는 기존 선을 지운 뒤 새 선을 더한다.
+열은 `python3 scripts/graph_update.py set {GRAPH.md 경로} {노드 ID} '상태=완료' 'agentId={ID}'`처럼 바꿀 `열=값`만 넘긴다. `set`은 mermaid 정의가 없어도 표 행이 있으면 해당 열을 바꾼다. 각 갱신은 도구 호출 한 번이다.
 
 `GRAPH.md`는 mermaid 1개와 노드 표 1개만 둔다 — 스크립트가 그 블록을 갱신하며 새 갱신본을
-뒤에 덧붙이는 것이 아니다. 노드 추가·승인된 구조 변경은 mermaid와 표에 함께 반영한다.
+뒤에 덧붙이는 것이 아니다. 노드 추가·삭제는 mermaid와 표에 함께 반영하고 관계선 변경은 mermaid에 반영한다.
 **이 「mermaid 1개와 노드 표 1개만」 규칙의 예외는 맨 위 버전 줄 하나뿐이다**(아래 「버전 줄」).
 
 ### 버전 줄
