@@ -541,8 +541,10 @@ def self_test(stdout, stderr):
                         imported.update(alias.name.split(".", 1)[0] for alias in node.names)
                     elif isinstance(node, ast.ImportFrom) and node.module:
                         imported.add(node.module.split(".", 1)[0])
-                check(imported <= sys.stdlib_module_names,
-                      f"표준 라이브러리 밖 import: {sorted(imported - sys.stdlib_module_names)}")
+                stdlib = getattr(sys, "stdlib_module_names", frozenset(
+                    "argparse ast io json os pathlib re subprocess sys tempfile".split()))
+                check(imported <= stdlib,
+                      f"표준 라이브러리 밖 import: {sorted(imported - stdlib)}")
 
             tests = (test_g1, test_g2, test_g3, test_g4, test_g5, test_g6,
                      test_g7, test_g8, test_g9, test_g10, test_g11)
