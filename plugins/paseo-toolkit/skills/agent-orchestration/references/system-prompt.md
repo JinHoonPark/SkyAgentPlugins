@@ -14,7 +14,7 @@
 python3 scripts/append_system_prompt.py --value "추가할 한 줄"
 ```
 
-SKILL.md 8절의 명시 승인을 받은 뒤에만 같은 명령에 `--apply`를 붙인다. 백업·반영·reload·로그 재적재 확인과 실패 시 롤백은 스크립트가 한다.
+SKILL.md 「세션이 이 스킬을 참조하지 않고 지나갈 때」의 명시 승인을 받은 뒤에만 같은 명령에 `--apply`를 붙인다. 백업·반영·reload·로그 재적재 확인과 실패 시 롤백은 스크립트가 한다.
 
 ## 복구
 
