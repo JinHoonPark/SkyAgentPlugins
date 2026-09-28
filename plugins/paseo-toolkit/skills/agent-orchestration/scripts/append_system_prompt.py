@@ -30,8 +30,7 @@ EXIT_UNVERIFIED = 4
 UTF8_BOM = codecs.BOM_UTF8
 EXPECTED_RELOAD_STDOUT = "Configuration reloaded."
 EFFECT_FROM = (
-    "새 세션부터 적용된다고 보되, 실행 중 세션 반영 여부는 "
-    "SPIKE.md 게이트 2팔 관측으로 확정한다."
+    "새 세션부터 적용된다."
 )
 
 for _stream in (sys.stdout, sys.stderr):
@@ -280,7 +279,7 @@ def append_line(current: str, line: str) -> str:
 
 
 def already_has_line(current: str, proposed: str) -> bool:
-    """AC-58: a routing line already present is a no-op."""
+    """A routing line already present is a no-op."""
 
     if current == proposed:
         return True

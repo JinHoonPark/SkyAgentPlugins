@@ -4,7 +4,7 @@
 
 [references/delegation.md](delegation.md)의 「레벨 판정 게이트」에서 레벨 1로 판정된 요청과 팀장 직접 수정 뒤의 검토 노드가 이 절로 온다. 단위마다 delegation.md 「프로필 선택과 값 이관」의 프로필을 고른다. 성격이 같으면 같은 프로필을 써도 된다. 계획 승인은 없다(SKILL.md 「위임 경로의 승인·판정 게이트」).
 
-`create_agent` **전에** `python3 scripts/graph_update.py create` 또는 `add-row`로 `GRAPH.md`의 mermaid와 노드 행을 쓰고, 기동 결과를 받는 즉시 `set`으로 `agentId`를 채운다. 형식과 기록 시점은 아래 「공통 `GRAPH.md` 기록」·「레벨 1의 `GRAPH.md` 기록」을 따른다.
+`create_agent` **전에** `python3 scripts/graph_update.py create` 또는 `add-row`로 `GRAPH.md`의 mermaid와 노드 행을 쓰고, 기동 결과를 받는 즉시 `set`으로 `agentId`를 채운다. 경로 인수는 [references/delegation.md](delegation.md) 첫머리의 절대 경로 규칙을 따른다. 형식과 기록 시점은 아래 「공통 `GRAPH.md` 기록」·「레벨 1의 `GRAPH.md` 기록」을 따른다.
 
 ### 활성 큐와 대기 큐
 
@@ -16,11 +16,9 @@ delegation.md 「전제 점검」에서 확인한 알림·대기 수단을 쓴�
 
 ## 공통 `GRAPH.md` 기록
 
-`python3`가 없으면 Python 명령을 `python`으로 실행한다.
-
 레벨 1·2는 아래 `GRAPH.md` 형식과 기록 시점을 함께 쓴다.
 
-경로: delegation.md 「결과 파일로 받는다」에서 정한 실행 디렉터리의 `GRAPH.md`
+경로: delegation.md 「결과 파일로 받는다」에서 정한 실행 디렉터리의 `GRAPH.md`. 아래 모든 `graph_update.py` 호출의 경로 인수는 `list_workspaces`로 조회한 워크스페이스 `cwd`에 그 실행 디렉터리 상대 경로를 붙인 절대 경로다.
 결과 파일 규칙은 그 절과 같다. 노드 표는 `노드 ID`·`종류`·`프로필`·`입력`·`결과 파일`·`합격 기준`·`진행 조건`·`워크스페이스`·`되돌리기`·`재시도`·`검토 라운드`·`게이트`·`상태`·`agentId`의 14열이다.
 
 스킬 디렉터리에서 UTF-8 mermaid 블록을 같은 도구 호출의 표준 입력으로 넘기며
@@ -59,18 +57,7 @@ delegation.md 「전제 점검」에서 확인한 알림·대기 수단을 쓴�
 
 ## 레벨 1 재개
 
-리더 컨텍스트가 압축되거나 실행이 중단된 뒤 같은 요청을 이어받으면, 팬아웃을 처음부터 다시
-설계하지 않고 아래 네 동작으로 이어 간다. 근거는 바로 앞 「레벨 1의 `GRAPH.md` 기록」이 남긴 표다.
-
-1. `list_agents`로 자식 에이전트를 조회한다. Paseo가 자식의 `labels`에 넣는
-   `paseo.parent-agent-id`로 이전 실행에서 띄운 자식인지 가려낸다.
-2. 실행 디렉터리의 `GRAPH.md`를 읽어 기록된 `agentId`·결과 파일(`nodes/{노드 ID}.md`)·
-   실패 보고 파일(`nodes/{노드 ID}.failure.md`)을 위 조회 결과와 대조한다. `agentId` 칸이
-   비어 있으면 아직 기동하지 않은 노드다.
-3. 실행 중이거나 `완료`인 노드는 재기동하지 않는다. 실행 중이면 종료를 기다리고, `완료`는
-   표 기록만 믿지 않고 결과 파일과 합격 기준을 대조해 판정을 다시 세운다.
-4. `대기` 노드는 기동한다. `실패` 노드는 재시도 조건과 잔여 횟수(delegation.md 「실행 중 개입과 실패」)를 충족할 때만
-   재기동한다. 기동은 「활성 큐와 대기 큐」의 활성 큐 규칙과 동시 실행 상한을 그대로 따른다.
+리더 컨텍스트가 압축되거나 실행이 중단된 뒤 같은 요청을 이어받으면 [references/failure-handling.md](failure-handling.md)의 「재개」를 따른다.
 
 ## 의존을 뒤늦게 발견하면
 
