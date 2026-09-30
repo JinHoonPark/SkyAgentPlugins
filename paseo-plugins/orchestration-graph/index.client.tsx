@@ -91,11 +91,19 @@ export default function contribute(client: PluginClientContext) {
   });
   registerStop(stopSubscription);
 
-  void client.paseo.agents.list().then(
+  void client.paseo.agents.list({ subscribe: {} }).then(
     (listed) => {
+      const { subscription } = listed as typeof listed & {
+        subscription?: { release(): Promise<void> };
+      };
+      const stopListSubscription = () => {
+        void subscription?.release().catch((error) => console.error("Agent list cleanup failed", error));
+      };
       if (cleanedUp) {
+        stopListSubscription();
         return;
       }
+      registerStop(stopListSubscription);
       for (const entry of listed.entries) {
         registerAgentPill(entry.agent);
       }
