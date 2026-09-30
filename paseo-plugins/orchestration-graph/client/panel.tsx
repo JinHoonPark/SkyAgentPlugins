@@ -1,5 +1,6 @@
 import type { PluginAgentPanelProps } from "@getpaseo/plugin/client";
 import { useAgent, usePaseo, useRpc, useWorkspace } from "@getpaseo/plugin/client";
+import { Icon } from "@getpaseo/plugin/client/react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Animated, PanResponder, Pressable, ScrollView, Text, View } from "react-native";
@@ -199,6 +200,7 @@ export function OrchestrationGraphPanel({
   const [viewport, setViewport] = useState({ left: 0, top: 0, width: 0, height: 0 });
   const [panelSize, setPanelSize] = useState({ width: 0, height: 0 });
   const [hoverLabel, setHoverLabel] = useState<LabelHover | null>(null);
+  const [leaderHovered, setLeaderHovered] = useState(false);
   const [tooltipHeight, setTooltipHeight] = useState(TOOLTIP_ESTIMATED_HEIGHT);
   const panResponder = useMemo(
     () =>
@@ -378,6 +380,8 @@ export function OrchestrationGraphPanel({
     () => (source == null ? null : applyLiveGraph(source, snapshots)),
     [source, snapshots],
   );
+  const canvasView = useMemo(() => (view == null ? null : { ...view, root: null }), [view]);
+  const root = view != null && !view.waiting ? view.root : null;
   // 노드 누름은 루트 판정에 기대지 않는다. 표의 부모가 하나로 모이지 않는 그래프(예: 부모가
   // 표 밖에 있는 행이 하나 섞인 확인용 그래프)에서는 루트가 null이 되는데, 그때 루트로 막으면
   // agentId가 있는 노드까지 전부 disabled가 되어 누름이 죽는다. agentId 없는 노드는
@@ -417,12 +421,12 @@ export function OrchestrationGraphPanel({
     return ids;
   }, [source, view]);
   const layoutKey =
-    view == null ? "" : layoutSignature(view.root?.id ?? null, view.nodes, view.edges, layout.compact);
+    view == null ? "" : layoutSignature(null, view.nodes, view.edges, layout.compact);
   const placed = useMemo(() => {
     if (view == null) {
       return null;
     }
-    return layoutGraph(view.root, view.nodes, view.edges, layout.compact);
+    return layoutGraph(null, view.nodes, view.edges, layout.compact);
     // layoutKey already encodes root, node ids, label-line counts, edges, and compact.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- view identity changes on status ticks
   }, [layoutKey]);
@@ -562,6 +566,55 @@ export function OrchestrationGraphPanel({
             ) : null}
           </View>
         ) : null}
+        {root != null ? (
+          <Pressable
+            onPress={() => navigation?.openAgent({ agentId: root.id })}
+            onHoverIn={() => setLeaderHovered(true)}
+            onHoverOut={() => setLeaderHovered(false)}
+            disabled={navigation == null}
+            accessibilityRole="button"
+            accessibilityLabel="팀장 에이전트 열기"
+            accessibilityState={{ disabled: navigation == null }}
+            style={({ pressed }) => ({
+              minWidth: 0,
+              minHeight: 40,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              paddingHorizontal: layout.compact ? 10 : 14,
+              paddingVertical: 9,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: pressed || leaderHovered ? theme.colors.foregroundMuted : theme.colors.border,
+              backgroundColor: pressed
+                ? theme.colors.foreground
+                : leaderHovered
+                  ? theme.colors.surface2
+                  : theme.colors.surface1,
+              opacity: navigation == null ? 0.5 : 1,
+            })}
+          >
+            {({ pressed }) => (
+              <>
+                <Icon name="Compass" size={16} color={pressed ? theme.colors.surface0 : theme.colors.foreground} />
+                <Text
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                  style={{
+                    flexShrink: 1,
+                    color: pressed ? theme.colors.surface0 : theme.colors.foreground,
+                    fontSize: layout.compact ? 13 : 14,
+                    lineHeight: 20,
+                    fontWeight: "600",
+                  }}
+                >
+                  팀장 에이전트 열기
+                </Text>
+              </>
+            )}
+          </Pressable>
+        ) : null}
         {tapIds.map((id) => (
           <AgentSnapshotTap key={id} agentId={id} onSnapshot={putSnapshot} />
         ))}
@@ -616,7 +669,7 @@ export function OrchestrationGraphPanel({
           </View>
         ) : null}
       </View>
-      {view != null && placed != null ? (
+      {canvasView != null && placed != null ? (
         <View
           style={styles.graphViewport}
           onLayout={(event) => {
@@ -642,7 +695,7 @@ export function OrchestrationGraphPanel({
           >
             <GraphCanvas
               key={graphName}
-              view={view}
+              view={canvasView}
               placed={placed}
               colors={theme.colors}
               onNodePress={nodePressEnabled ? handleNodePress : undefined}
