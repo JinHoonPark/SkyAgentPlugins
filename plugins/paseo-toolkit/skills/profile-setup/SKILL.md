@@ -90,8 +90,8 @@ Paseo 프로필은 사람이 정한 시작 구성 묶음이다. 팀장(오케스
    **모델이 0개로 온 provider는 후보에서 뺀다. 활성 provider가 있어도 쓸 수 있는 모델이
    하나도 없으면 프리셋을 제안하지 말고 안내하고 중단한다** — 모델을 연결한 뒤 다시
    요청하라는 취지다. 안내 문구는 `../../references/presets.md`에 있다.
-   **조회 실패는 "없음"·"0개"와 다르다.** 목록에 있는데 `status`가 `available`이 아닌
-   것(`error` 등)은 provider가 없는 것이 아니고, `list_models` 실패·타임아웃은 모델이
+   **조회 실패는 "없음"·"0개"와 다르다.** `list_providers` 실패·타임아웃과, 목록에 있는데
+   `status`가 `available`이 아닌 것(`error` 등)은 provider가 없는 것이 아니고, `list_models` 실패·타임아웃은 모델이
    0개인 것이 아니다. 무엇을 조회하려다 어떻게 실패했는지 사용자에게 알리고, 값을
    추측해 채우지 않는다. 그 provider로 프로필을 만들어야 하면 `model`은 필수라 조회로
    고를 수 없으니 사용자에게 물어 확정하고, 조회로 확인되지 않은 선택 키는 1-4
@@ -107,7 +107,7 @@ MCP를 쓸 수 없으면 `paseo provider ls --json`과
 
 ### 1-2. 프리셋을 먼저 제안한다
 
-`../../references/presets.md`의 프리셋 15개 역할 세트에 1-1에서 확정한
+`../../references/presets.md`의 프리셋 역할 세트에 1-1에서 확정한
 모델을 채워 제시하고, **"이대로 쓸까요, 새로 구성할까요?"를 묻는다.** 표의 `color`도 그 승인에
 포함된다. 에이전트가 표와 다른 색을 넣지 않는다. 그대로 쓰겠다고 하면 질문 루프를 건너뛰고
 2절로 간다.
@@ -154,7 +154,7 @@ python scripts/show_profile_colors.py
 | `modeId` | **제안 후 명시 확인** | 대개 권한 등급이라(전용 어댑터 없는 provider는 예외) 조용히 정하면 사용자가 모르는 사이에 쓰기·실행 권한이 붙는다. 아래 규칙을 따른다. |
 | `thinkingOptionId` | **묻는다 (3턴)** | 그 모델의 `thinkingOptions`에 있는 값만. **빈 배열이면 필드를 넣지 않는다.** |
 | `notes` | 자동 생성 후 확인 | 라우팅의 유일한 근거라 초안을 만들어 「프로필 확인」에서 반드시 승인받는다. 1-5 참조. |
-| `icon` | 자동 파생 | Paseo 프로필 편집기가 제공하는 키 중 역할에 가까운 것. 프리셋 15개 역할 세트의 icon에 묶지 않는다. 표시 전용이라 라우팅에 영향이 없다. 「프로필 확인」에서 바꿀 수 있다. |
+| `icon` | 자동 파생 | Paseo 프로필 편집기가 제공하는 키 중 역할에 가까운 것. 프리셋 역할 세트의 icon에 묶지 않는다. 표시 전용이라 라우팅에 영향이 없다. 「프로필 확인」에서 바꿀 수 있다. |
 | `color` | **묻는다 (생성 시)** | 프로필을 새로 만들 때 아래 11개 값 중 무엇을 쓸지 사용자에게 묻는다. 선택지는 `scripts/show_profile_colors.py` stdout이다. 에이전트가 고르지 않는다. 표시 전용이라 라우팅에 영향이 없다. |
 | `featureValues` | 기본값 — 넣지 않는다 | 전부 `false`가 기본이다. 사용자가 `fast_mode` 같은 토글을 명시 요청할 때만 `inspect_provider`로 그 모델에 있는 기능인지 확인하고 넣는다. |
 
@@ -189,7 +189,7 @@ claude `plan`은 코드 수정과 도구 실행을 막아 **문서 산출까지 
 
 `icon`은 이모지가 아니라 Paseo 프로필 편집기가 제공하는 키다. 유효 키는
 [`../../scripts/manage_profiles.py`](../../scripts/manage_profiles.py)의 `ICON_REGISTRY`로
-확인한다. 프리셋 15개 역할 세트가 쓰는 키에 묶지 않는다. 레지스트리에 없는 값은 런타임에서 조용히
+확인한다. 프리셋 역할 세트가 쓰는 키에 묶지 않는다. 레지스트리에 없는 값은 런타임에서 조용히
 기본 아이콘이 되므로 스크립트가 적용 전에 오류로 막는다.
 
 `color`는 프로필을 새로 만들 때 사용자에게 묻는다. 선택지는 `none`, `violet`, `sky`, `emerald`,
@@ -436,7 +436,7 @@ Paseo 설치의 설정은 이 명령으로 복원할 수 없다.
 
 | 문서 | 읽는 시점 |
 | --- | --- |
-| [`../../references/presets.md`](../../references/presets.md) | 1-1의 provider·모델 해석 절차를 실행할 때, 프리셋 15개 역할 세트를 제시할 때, 권한 등급과 `thinkingOptionId` 규칙이 필요할 때. |
+| [`../../references/presets.md`](../../references/presets.md) | 1-1의 provider·모델 해석 절차를 실행할 때, 프리셋 역할 세트를 제시할 때, 권한 등급과 `thinkingOptionId` 규칙이 필요할 때. |
 | [`references/provider-modes.md`](references/provider-modes.md) | `modeId`의 유효 값과 provider별 의미 차이를 확인할 때, 모델별 `thinkingOptions`의 생김새와 함정을 볼 때, `featureValues` 키 이름이 헷갈릴 때. |
 | [`references/FORM.md`](references/FORM.md) | 사용자에게 보여줄 화면을 만들기 직전에, 해당 절만 범위 읽기로. |
 

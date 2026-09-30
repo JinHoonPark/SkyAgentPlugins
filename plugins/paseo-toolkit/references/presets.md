@@ -1,4 +1,6 @@
-# 프리셋 세트 — 15개 역할
+# 프리셋 세트
+
+기준 Paseo 버전: 0.10.2 — 노출되는 모델은 Paseo 버전에 따라 다르다.
 
 사용자에게 "이 프리셋 그대로 쓸지, 새로 구성할지" 물을 때 보여주는 세트다. 사용자가 직접
 설계를 요청했거나 이 세트를 거절하면 쓰지 않는다.
@@ -55,8 +57,7 @@ MCP `list_providers`로 활성 provider 목록을 받는다.
 표시하고** 4단계로 간다. 어긋난 조건과 조회된 값을 6단계에서 함께 보여준다.
 
 표의 `claude/...` 후보도 같은 판정을 받는다. **claude가 활성이 아니거나 그 모델 ID가 조회
-결과에 없으면 그 후보는 충족 실패다.** `claude/claude-opus-5`, `claude/claude-sonnet-5`는
-조회될 때만 쓰고, 없으면 4단계의 폴백으로 진행한다.
+결과에 없으면 그 후보는 충족 실패다.**
 
 ### 4단계 — 유효한 폴백 후보
 
@@ -78,22 +79,9 @@ MCP `list_providers`로 활성 provider 목록을 받는다.
 - 어떤 역할이 기본·폴백·등급 해석을 모두 통과하지 못했으면 그 역할을 「충족 실패」로 적고,
   무엇이 걸렸는지와 쓸 수 있는 대안을 함께 보여준다. 조용히 빠뜨리지 않는다.
 
-## 조회 장애 처리
-
-**조회 실패는 「후보 없음」이 아니라 장애다.** 값을 추측해 채우지 않는다.
-
-- `list_providers`가 실패·타임아웃했다 — 「활성 provider가 하나도 없다」 분기를 타지 않는다.
-  무엇을 조회하려다 어떻게 실패했는지 사용자에게 알리고 중단한다.
-- 목록에 있는데 `status`가 `available`이 아닌 provider(`error` 등)도 조회 실패다. 목록에서
-  빠진 것과 같이 취급하지 않는다. 무엇을 조회하려다 `status`가 무엇이었는지 알린다.
-- `list_models`가 실패·타임아웃했다 — 모델이 0개인 것과 같이 취급하지 않는다. 그 provider를
-  「모델 없음」으로 후보에서 빼지 않고, 0개 집계에도 넣지 않는다. 그 provider로 프로필을
-  만들어야 하면 `model`은 필수라 조회로 고를 수 없으니 사용자에게 물어 확정한다.
-- 조회로 확인되지 않은 선택 키는 생략한다. 추측값을 넣지 않는다.
-
 ## 역할별 thinking 등급
 
-표의 각 행에 적힌 `[low]`·`[medium]`·`[high]`·`[xhigh]`가 **그 역할의 thinking 등급**이다.
+표의 각 행에 적힌 `[ ]` 안의 값이 **그 역할의 thinking 등급**이다.
 등급은 모델이 아니라 역할에 붙는다.
 
 - **표의 thinking 값을 임의로 낮추지 않는다.** 후보 모델이 그 등급을 지원하지 않으면 그
@@ -102,60 +90,46 @@ MCP `list_providers`로 활성 provider 목록을 받는다.
   역할의 thinking 등급은 그대로 조회된 옵션에 대응시킨다.
 - 조회된 어떤 후보도 그 등급을 지원하지 않으면, 한 단계 낮춘 값과 그 근거를 사용자에게
   제시하고 **승인받은 경우에만** 낮춘다. 임의로 내려 등록하지 않는다.
-- `ultra`(codex)와 `ultracode`(claude)는 그 등급을 요구하는 역할이 없고, 사용자가 명시적으로
-  요청할 때만 넣는다.
+- `ultra`(codex)와 `ultracode`(claude)는 사용자가 명시적으로 요청할 때만 넣는다.
 - `thinkingOptions`가 빈 배열인 모델은 `thinkingOptionId` 필드를 넣지 않는다. 그 모델이
   역할의 등급을 지원한다고 판정하지도 않는다.
 
-## claude만 활성이고 codex가 없는 환경의 폴백
-
-**별도의 claude 전용 후보표를 두지 않는다.** 기본 추천과 폴백이 모두 `codex`인 역할은 두
-후보가 다 충족 실패가 되므로, 「등급 해석」 절차로 내려간다.
-
-그 경로에서도 **역할별 thinking 등급은 유지한다.** claude에서 조회된 모델 중 등급 해석이
-고른 모델에 대해, 역할의 등급을 그 모델의 `thinkingOptions`에 대응시킨다. 예컨대 저성능
-역할(`simple-explore`, `run-command`)은 `low`, 고성능 역할(`spec`은 `xhigh`)은 그 등급을
-그대로 요구한다. 등급을 최고로 올리거나 최저로 내려 맞추지 않는다.
-
 ## 새 provider·새 모델
 
-**표에 없는 새 provider와 새 모델을 배제하지 않는다.** 등급 해석은 표가 아니라 조회 결과로
-후보를 만들므로, 새로 연결된 provider도 그 provider 안에서 등급이 매겨지면 후보가 된다.
-표는 조회 결과를 대체하지 않는다.
+**표에 없는 새 provider와 새 모델을 배제하지 않는다.** 계열표에 없는 provider·계열도
+등급 해석 5번에 따라 사용자가 등급을 정하면 후보가 된다. 표는 조회 결과를 대체하지 않는다.
 
 ### 등급 해석 — 표 밖 후보 만들기
 
-3단계·4단계가 모두 충족 실패이거나 위의 claude 전용 환경일 때 쓴다. 조회 결과만으로
-판정하며, 모델 ID를 아는 것에 의존하지 않는다.
+3단계·4단계가 모두 충족 실패일 때 쓴다. 등급은 모델 계열로 정하고, 같은 계열 안에서는
+조회 결과의 최신 버전을 쓴다.
 
-**1. provider 안에서 사고 상한으로 정렬한다.** 상한은 그 모델의 `thinkingOptions` 중 가장
-높은 값이고, 높낮이는 이 순서다.
+**1. 계열로 등급을 정한다.** 계열은 모델 ID에 들어 있는 이름이다.
 
-```text
-(빈 배열) < off < low < medium < high < xhigh < max < ultra = ultracode
-```
+| 등급 | codex | claude |
+| --- | --- | --- |
+| 고성능 | `astra` | `opus` |
+| 중급 | `sol` | `sonnet` |
+| 저성능 | `luna` | `haiku` |
 
-`ultra`(codex)와 `ultracode`(claude)는 이름만 다른 같은 자리다. 상한이 같으면 `list_models`가
-돌려준 순서를 유지한다.
+**2. 같은 계열 안에서는 항상 최신 버전을 쓴다.** 모델 ID에서 점(`.`)이나 하이픈(`-`)으로 나뉜
+숫자를 버전으로 읽고, 앞자리부터 숫자로 비교해 가장 큰 것을 고른다. 자리 수가 다르면 없는
+자리를 0으로 본다. 버전은 이 문서에 적지 않고 조회할 때마다 판정한다.
 
-**2. 정렬 결과의 자리로 등급을 준다.**
+**3. 접미사가 붙은 변형은 기본 후보에서 뺀다.** `[1m]`처럼 대괄호 접미사가 붙은 ID는 같은
+모델의 변형이다. 사용자가 요청할 때만 쓴다.
 
-| provider의 모델 수 | 고성능 | 중급 | 저성능 |
-| --- | --- | --- | --- |
-| 3개 이상 | 1위 | 2위 | 최하위 |
-| 2개 | 1위 | 1위 | 2위 |
-| 1개 | 그 모델 | 그 모델 | 그 모델 |
+**4. 최신 버전이 역할의 thinking 등급을 지원하지 않아도 이전 버전으로 내려가지 않는다.**
+「역할별 thinking 등급」 절에 따라 한 단계 낮춘 값과 근거를 제시하고 승인받는다.
 
-등급은 **provider 안에서의 상대 순위**다. provider마다 따로 매긴다. 모델 수가 적은
-provider도 이 표로 세 등급이 모두 채워지므로, 모델이 적다는 이유로 제외되지 않는다.
+**5. 계열표에 없으면 사용자에게 묻는다.** 계열표에 없는 계열의 모델과 codex·claude 밖
+provider의 모델은 조회된 ID와 설명을 보여주고, 어느 등급에 둘지 또는 후보에서 뺄지 묻는다.
+임의로 등급을 붙이지 않는다.
 
-**3. 역할의 성능 등급으로 모델을 고른다.** 등급 해석은 역할 행의 요구 성능 등급
+**6. 역할의 성능 등급으로 모델을 고른다.** 등급 해석은 역할 행의 요구 성능 등급
 (고성능·중급·저성능)으로 후보를 찾는다.
 
-**4. 상한이 같아 갈리지 않으면 묻는다.** 반환 순서로도 우열을 정할 수 없으면 추측하지 말고
-사용자에게 어느 것을 위에 둘지 묻는다.
-
-**5. 활성 provider가 여럿이면 등급마다 후보가 생긴다.** 어느 provider를 쓸지 임의로 고르지
+**7. 활성 provider가 여럿이면 등급마다 후보가 생긴다.** 어느 provider를 쓸지 임의로 고르지
 말고, 등급별 후보를 사용자에게 보여주고 고르게 한다. 역할마다 따로 묻지 않고 고성능·중급·
 저성능 세 등급에 대해 한 번만 묻는다. 사용자가 선호 provider를 이미 말했으면 그것을 기본으로
 두고 확인만 받는다.
@@ -185,21 +159,21 @@ provider도 이 표로 세 등급이 모두 채워지므로, 모델이 적다는
 
 | id | name | 기본 추천 | 폴백 | 요구 성능 등급 | 권한 등급 | icon / color |
 | --- | --- | --- | --- | --- | --- | --- |
-| `team-lead` | 팀장 | `claude/claude-opus-5 [high]` | `codex/gpt-5.6-terra [high]` | 고성능 | 파일 작성 | compass / violet |
-| `simple-explore` | 단순 탐색 | `codex/gpt-5.6-luna [low]` | `codex/gpt-5.6-terra [high]` | 저성능 | 읽기·확인 | search / sky |
-| `explore` | 관계·구조 탐색 | `codex/gpt-5.6-terra [high]` | `codex/gpt-5.6-sol [medium]` | 중급 | 읽기·확인 | layers / indigo |
-| `run-command` | 정해진 명령 실행 | `codex/gpt-5.6-luna [low]` | `codex/gpt-5.6-terra [high]` | 저성능 | 명령 전권 | terminal / sky |
-| `advanced-run-command` | 적응형 명령 실행 | `codex/gpt-5.6-terra [high]` | `codex/gpt-5.6-sol [medium]` | 중급 | 명령 전권 | wrench / teal |
-| `spec` | 스펙 | `claude/claude-opus-5 [xhigh]` | `codex/gpt-5.6-terra [high]` | 고성능 | 파일 작성 | fileText / emerald |
-| `spike-plan` | 스파이크 설계 | `claude/claude-opus-5 [high]` | `codex/gpt-5.6-terra [high]` | 고성능 | 파일 작성 | flask / amber |
-| `spike` | 스파이크 실행 | `codex/gpt-5.6-terra [high]` | `codex/gpt-5.6-sol [medium]` | 중급 | 파일 작성 | testTube / orange |
-| `milestone` | 마일스톤 | `claude/claude-opus-5 [high]` | `codex/gpt-5.6-terra [high]` | 고성능 | 파일 작성 | boxes / blue |
-| `task-breakdown` | 태스크 분해 | `codex/gpt-5.6-sol [medium]` | `codex/gpt-5.6-terra [high]` | 중급 | 파일 작성 | package / pink |
-| `implement` | 구현 | `codex/gpt-5.6-terra [high]` | `codex/gpt-5.6-sol [medium]` | 중급 | 파일 작성 | code / orange |
-| `light-implement` | 경량 구현 | `codex/gpt-5.6-terra [high]` | `codex/gpt-5.6-sol [medium]` | 중급 | 파일 작성 | feather / teal |
-| `debug` | 디버깅 | `codex/gpt-5.6-sol [medium]` | `codex/gpt-5.6-terra [high]` | 중급 | 파일 작성 | bug / red |
-| `review` | 리뷰·검증 | `codex/gpt-5.6-sol [high]` | `codex/gpt-5.6-terra [high]` | 고성능 | 읽기·확인 | eye / amber |
-| `advisor` | 자문 | `codex/gpt-6-astra [high]` | `codex/gpt-5.6-terra [high]` | 고성능 | 읽기·확인 | brain / indigo |
+| `team-lead` | 팀장 | `claude/claude-opus-5-5 [high]` | `codex/gpt-6.1-sol [high]` | 고성능 | 파일 작성 | compass / violet |
+| `simple-explore` | 단순 탐색 | `codex/gpt-6-luna [medium]` | `codex/gpt-6-luna [high]` | 저성능 | 읽기·확인 | search / sky |
+| `explore` | 추론 탐색 | `codex/gpt-6.1-sol [medium]` | `codex/gpt-6.1-sol [medium]` | 중급 | 읽기·확인 | layers / indigo |
+| `run-command` | 단순 명령 실행 | `codex/gpt-6-luna [low]` | `codex/gpt-6-luna [high]` | 저성능 | 명령 전권 | terminal / sky |
+| `advanced-run-command` | 추론 명령 실행 | `codex/gpt-6.1-sol [medium]` | `codex/gpt-6.1-sol [medium]` | 중급 | 명령 전권 | wrench / teal |
+| `spec` | 스펙 | `claude/claude-opus-5-5 [medium]` | `codex/gpt-6.1-sol [medium]` | 고성능 | 파일 작성 | fileText / emerald |
+| `spike-plan` | 스파이크 설계 | `codex/gpt-6.1-sol [medium]` | `codex/gpt-6.1-sol [medium]` | 중급 | 파일 작성 | flask / amber |
+| `spike` | 스파이크 실행 | `codex/gpt-6.1-sol [medium]` | `codex/gpt-6.1-sol [medium]` | 중급 | 파일 작성 | testTube / orange |
+| `milestone` | 마일스톤 | `claude/claude-opus-5-5 [medium]` | `codex/gpt-6.1-sol [medium]` | 고성능 | 파일 작성 | boxes / blue |
+| `task-breakdown` | 태스크 분해 | `codex/gpt-6.1-sol [medium]` | `codex/gpt-6.1-sol [medium]` | 중급 | 파일 작성 | package / pink |
+| `implement` | 구현 | `codex/gpt-6.1-sol [medium]` | `codex/gpt-6.1-sol [medium]` | 중급 | 파일 작성 | code / orange |
+| `light-implement` | 경량 구현 | `codex/gpt-6-luna [max]` | `codex/gpt-6-luna [max]` | 저성능 | 파일 작성 | feather / teal |
+| `debug` | 디버깅 | `codex/gpt-6.1-sol [high]` | `codex/gpt-6.1-sol [high]` | 중급 | 파일 작성 | bug / red |
+| `review` | 리뷰·검증 | `codex/gpt-6.1-sol [high]` | `codex/gpt-6.1-sol [high]` | 중급 | 읽기·확인 | eye / amber |
+| `advisor` | 자문 - Codex | `codex/gpt-6-astra [high]` | `codex/gpt-6-astra [high]` | 고성능 | 읽기·확인 | brain / indigo |
 
 `icon`과 `color`는 표시 전용이라 라우팅에 영향을 주지 않는다. `icon`은 위의 키를 그대로
 쓰고, `color`는 프로필을 새로 만들 때 사용자에게 묻는 값이다.
@@ -213,33 +187,31 @@ provider도 이 표로 세 등급이 모두 채워지므로, 모델이 적다는
 
 - `notes`: `스킬 적용 판정에서 직접 처리로 판정된 요청은 직접 처리하고, 적용된 요청은 단계·담당 프로필·실행 순서를 정해 워커에게 맡긴 뒤 결과를 취합한다. 자문 호출은 사용 목적의 사용자 승인이 있을 때만 한다.`
 - 권한 근거: 직접 처리로 판정된 작업에서 파일을 만들거나 고친다.
-- 라우팅이 틀리면 그 아래 작업이 전부 어긋난다. 고성능 등급과 `[high]`를 낮추지 않는다.
 
 ### `simple-explore` — 단순 탐색
 
-- `notes`: `정확한 이름·문구·경로·코드 위치를 찾아 근거와 함께 반환한다. 워크스페이스 밖 경로와 공개 웹도 필요하면 읽는다. 관계 해석은 explore.`
+- `notes`: `추론 없이 정해진 이름·문구·경로·코드 위치를 찾아 근거와 함께 반환한다. 워크스페이스 밖 경로와 공개 웹도 필요하면 읽는다. 찾을 대상을 추론으로 좁히거나 결과를 해석해야 하면 explore.`
 - 권한 근거: 읽기만 한다. 쓰기 권한을 기본으로 주지 않는다.
 
-### `explore` — 관계·구조 탐색
+### `explore` — 추론 탐색
 
-- `notes`: `여러 파일·문서를 연결해 구조·흐름·영향 범위를 설명한다. 워크스페이스 밖 경로도 필요하면 읽는다. 정확 검색은 simple-explore, 결함 원인 추적은 debug.`
+- `notes`: `찾을 대상을 추론으로 좁히거나, 찾은 결과를 여러 파일·문서와 연결해 해석해야 하는 탐색을 맡아 구조·흐름·영향 범위를 근거와 함께 반환한다. 워크스페이스 밖 경로와 공개 웹도 필요하면 읽는다. 그대로 찾으면 되는 검색은 simple-explore, 결함 원인 추적은 debug.`
 - 권한 근거: 읽기만 한다. 구조 해석에 파일 작성이 필요하지 않다.
 
-### `run-command` — 정해진 명령 실행
+### `run-command` — 단순 명령 실행
 
-- `notes`: `지정된 명령을 실행하고 종료 코드·핵심 출력을 보고한다. 워크스페이스 밖 경로의 명령도 실행한다. 명령 선택이 필요하면 advanced-run-command, 원인 추적은 debug.`
+- `notes`: `지정된 명령을 판단 없이 실행하고 종료 코드와 출력을 보고한다. 워크스페이스 밖 경로의 명령도 실행한다. 실행 전후에 명령 선택·사전 조건 확인·출력 해석 같은 추론이 필요하면 advanced-run-command, 원인 추적은 debug.`
 - 권한 근거: 명령 실행이 목적이라 명령 전권 등급이 필요하다. 등록 전 확인 절차는 「권한 등급 → `modeId`」 절을 따른다.
 
-### `advanced-run-command` — 적응형 명령 실행
+### `advanced-run-command` — 추론 명령 실행
 
-- `notes`: `출력에 따라 빌드·테스트·점검 명령을 선택해 실행한다. 워크스페이스 밖 경로와 환경 점검도 맡는다. 원인 가설·코드 수정은 debug, 기능 실험은 spike.`
+- `notes`: `명령이 지정됐는지와 상관없이, 실행 전후에 명령 선택·사전 조건 확인·출력 해석·다음 명령 결정 같은 추론이 필요한 명령 실행을 맡는다. 워크스페이스 밖 경로와 환경 점검도 맡는다. 원인 가설·코드 수정은 debug, 기능 실험은 spike.`
 - 권한 근거: 실행할 명령을 스스로 고르므로 명령 전권 등급이 필요하다. 등록 전 확인 절차는 같다.
 
 ### `spec` — 스펙
 
 - `notes`: `무엇을 만들지 불명확할 때 요구사항·범위·비범위·수용 기준을 정리하고, 확정된 스펙의 스파이크(생략 시 마일스톤) 필요성 판정안을 낸다. 사업·제품 선택은 사용자 확인, 검증 설계는 spike-plan. | ★ 지침 : 문서에는 이 네 가지만, 다른 문서 없이 읽히게 적는다. 채택 이유·근거·스파이크 이력은 빼고, 스파이크에 따른 변경은 사용자와 정한 것만 반영한다.`
 - 권한 근거: 스펙을 **파일로** 남긴다. claude `plan`은 그 산출까지 막으므로 쓰지 않는다.
-- `[xhigh]`는 이 역할에만 있다. 요구사항 누락이 뒤 단계 전체를 어긋나게 하므로 낮추지 않는다.
 
 ### `spike-plan` — 스파이크 설계
 
@@ -263,12 +235,12 @@ provider도 이 표로 세 등급이 모두 채워지므로, 모델이 적다는
 
 ### `implement` — 구현
 
-- `notes`: `확정된 설계와 수용 기준으로 기능·다중 파일 변경·원인이 특정된 결함을 구현하고 검증한다. 설계 미정은 spec, 원인 미상은 debug, 정형 소수 파일은 light-implement.`
+- `notes`: `확정된 설계와 수용 기준으로, 호출부·동작 영향 판단이 필요한 기능·변경·원인이 특정된 결함을 구현한다. 설계 미정은 spec, 원인 미상은 debug, 영향 판단이 필요 없는 변경은 light-implement.`
 - 권한 근거: 본 코드를 고치는 역할이다.
 
 ### `light-implement` — 경량 구현
 
-- `notes`: `설계 판단 없이 두 파일 이하의 정해진 상수·설정·주석·문서·이름을 수정한다. 호출부나 동작 영향 판단이 필요하면 implement.`
+- `notes`: `설계와 수용 기준이 정해져 있고 호출부·동작 영향 판단이 필요 없는 변경(상수·설정·문서·이름 수정, 국소 로직 수정, 원인이 특정된 결함 수정)을 구현한다. 영향 판단이 필요하면 implement.`
 - 권한 근거: 파일을 고치지만 범위가 좁다. 권한 등급은 `implement`와 같다.
 
 ### `debug` — 디버깅
@@ -281,7 +253,7 @@ provider도 이 표로 세 등급이 모두 채워지므로, 모델이 적다는
 - `notes`: `변경을 수용 기준·회귀·테스트 범위와 대조해 근거 있는 결함과 진행 가능 여부를 보고한다. 대상 코드는 수정하지 않는다. 난해한 쟁점은 승인 후 advisor.`
 - 권한 근거: 판정만 한다. 파일 작성 권한을 주면 지적과 수정이 섞여 판정 근거가 흐려진다.
 
-### `advisor` — 자문
+### `advisor` — 자문 - Codex
 
 - `notes`: `사용자가 해당 자문 목적을 승인한 경우에만, 다른 워커가 해결하지 못한 기술·보안·설계 쟁점을 근거로 판단한다. 일반 탐색·구현·리뷰는 담당 워커로 보낸다.`
 - 권한 근거: 판단만 하고 산출물을 만들지 않는다. 자문 호출은 사용자 승인이 있을 때만 한다.
@@ -293,37 +265,3 @@ provider도 이 표로 세 등급이 모두 채워지므로, 모델이 적다는
 - `id`: `team-lead`. 여러 개면 `team-lead-<구분>`으로 접두를 유지한다.
 - `name`: `팀장`을 포함한다. 여러 개면 `팀장 · <구분>` 형태로 쓴다.
 - 워커 프로필의 `id`와 `name`에는 `team-lead` / `팀장`을 넣지 않는다.
-
-## 해석 예시
-
-활성 provider가 `claude` 하나이고, 등급 해석에서 `claude-opus-5`가 고성능 1위로 나왔을 때
-`team-lead`의 결과는 이렇다. **이 값들은 예시이며 조회 결과에 따라 달라진다.**
-
-```json
-{
-  "id": "team-lead",
-  "name": "팀장",
-  "provider": "claude",
-  "model": "claude-opus-5",
-  "thinkingOptionId": "high",
-  "modeId": "auto",
-  "icon": "compass",
-  "color": "violet",
-  "notes": "스킬 적용 판정에서 직접 처리로 판정된 요청은 직접 처리하고, 적용된 요청은 단계·담당 프로필·실행 순서를 정해 워커에게 맡긴 뒤 결과를 취합한다. 자문 호출은 사용 목적의 사용자 승인이 있을 때만 한다."
-}
-```
-
-`claude`만 활성인 환경이므로 기본 추천(`claude/claude-opus-5 [high]`)이 먼저 판정된다. 조회
-결과에 그 모델이 있으면 그것이 쓰이고, 없으면 폴백도 `codex`라 충족 실패가 되어 등급 해석으로
-내려간다. 어느 경로든 역할의 등급 `[high]`는 그대로 유지된다. `thinkingOptionId`가
-`ultracode`가 아닌 것도 이 규칙대로다 — 최상위 값은 사용자가 명시적으로 요청할 때만 쓴다.
-
-`featureValues`는 어느 역할에도 넣지 않는다. 전부 기본값 `false`로 두는 것이 기본이고,
-`fast_mode` 같은 토글은 사용자가 요청할 때만 `inspect_provider`로 존재를 확인하고 추가한다.
-
-## `notes` 길이
-
-`notes`의 용도 부분(`| ★ 지침` 앞)이 Unicode 문자 160자를 넘으면 `../scripts/manage_profiles.py`의
-`MAX_NOTES_UNICODE_CHARS`(160자) 검사에 걸린다. 이것은 **경고이며 등록을 막는 오류가 아니다.**
-넘겼을 때는 한도를 늘리거나 문장을 잘라 저장하지 않고, 의미를 보존한 축약안을 사용자에게
-제시한다.
