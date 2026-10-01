@@ -4,13 +4,13 @@
 
 [references/delegation.md](delegation.md)의 「레벨 판정 게이트」에서 레벨 1로 판정된 요청과 팀장 직접 수정 뒤의 검토 노드가 이 절로 온다. 단위마다 delegation.md 「프로필 선택과 값 이관」의 프로필을 고른다. 성격이 같으면 같은 프로필을 써도 된다. 계획 승인은 없다(SKILL.md 「위임 경로의 승인·판정 게이트」).
 
-`create_agent` **전에** `python3 scripts/graph_update.py create` 또는 `add-row`로 `GRAPH.md`의 mermaid와 노드 행을 쓰고, 기동 결과를 받는 즉시 `set`으로 `agentId`를 채운다. 경로 인수는 [references/delegation.md](delegation.md) 첫머리의 절대 경로 규칙을 따른다. 형식과 기록 시점은 아래 「공통 `GRAPH.md` 기록」·「레벨 1의 `GRAPH.md` 기록」을 따른다.
+`create_agent` **전에** Python으로 실행하는 `scripts/graph_update.py create` 또는 `add-row`로 `GRAPH.md`의 mermaid와 노드 행을 쓰고, 기동 결과를 받는 즉시 `set`으로 `agentId`를 채운다. 경로 인수는 [references/delegation.md](delegation.md) 첫머리의 절대 경로 규칙을 따른다. 형식과 기록 시점은 아래 「공통 `GRAPH.md` 기록」·「레벨 1의 `GRAPH.md` 기록」을 따른다.
 
 ### 활성 큐와 대기 큐
 
 활성 큐는 실행 중 워커 최대 10개다. 나머지는 상한 없는 대기 큐에 쪼갠 순서(FIFO)로 둔다. 작업별로 노드 ID(`N`·`G` 접두별 독립 번호, 재부여 금지)·상태(`대기`·`실행 중`·`완료`·`실패`·`생략`)·프로필·대상·결과 경로·`agentId`·되돌리기 여부·재시도 가능 여부를 추적한다. 생략 단계에는 워커를 만들지 않는다. 큐는 컨텍스트에만 두고 별도 파일을 만들지 않으며, 노드별 `상태`·`agentId`는 `GRAPH.md`에 남긴다.
 
-delegation.md 「전제 점검」에서 확인한 알림·대기 수단을 쓴다. 알림이 있으면 폴링하지 않는다. 종료 1건을 확인할 때마다 실패 보고를 먼저 보고 결과 파일을 합격 기준과 대조해 판정한다. 파일 부재만으로 성공으로 보지 않는다. 판정 즉시 `python3 scripts/graph_update.py set`으로 `상태`를 기록하고 mermaid는 건드리지 않는다. 빈 슬롯만큼 대기 큐 선두를 기동해 `실행 중`을 기록한다. 기동 실패는 슬롯을 차지하지 않으며 delegation.md 「실행 중 개입과 실패」의 재시도 분류를 따른다. 대기·활성 큐가 모두 비면 최종 상태를 `set`으로 확정하고 delegation.md 「취합과 보고」로 보고한다.
+delegation.md 「전제 점검」에서 확인한 알림·대기 수단을 쓴다. 알림이 있으면 폴링하지 않는다. 종료 1건을 확인할 때마다 실패 보고를 먼저 보고 결과 파일을 합격 기준과 대조해 판정한다. 파일 부재만으로 성공으로 보지 않는다. 판정 즉시 Python으로 실행하는 `scripts/graph_update.py set`으로 `상태`를 기록하고 mermaid는 건드리지 않는다. 빈 슬롯만큼 대기 큐 선두를 기동해 `실행 중`을 기록한다. 기동 실패는 슬롯을 차지하지 않으며 delegation.md 「실행 중 개입과 실패」의 재시도 분류를 따른다. 대기·활성 큐가 모두 비면 최종 상태를 `set`으로 확정하고 delegation.md 「취합과 보고」로 보고한다.
 
 재개 또는 실패한 앞 작업의 결과가 대기 작업에 필요함을 뒤늦게 발견하면 아래 「레벨 1 재개」·「의존을 뒤늦게 발견하면」 중 필요한 절을 따른다.
 
@@ -22,12 +22,12 @@ delegation.md 「전제 점검」에서 확인한 알림·대기 수단을 쓴�
 결과 파일 규칙은 그 절과 같다. 노드 표는 `노드 ID`·`종류`·`프로필`·`입력`·`결과 파일`·`합격 기준`·`진행 조건`·`워크스페이스`·`되돌리기`·`재시도`·`검토 라운드`·`게이트`·`상태`·`agentId`의 14열이다.
 
 스킬 디렉터리에서 UTF-8 mermaid 블록을 같은 도구 호출의 표준 입력으로 넘기며
-`python3 scripts/graph_update.py create {GRAPH.md 경로} --mermaid-stdin --row '{14열 노드 행}'`로 생성한다. 노드 행마다 `--row`를 반복한다.
+Python으로 실행하는 `scripts/graph_update.py create {GRAPH.md 경로} --mermaid-stdin --row '{14열 노드 행}'`로 생성한다. 노드 행마다 `--row`를 반복한다.
 `create`는 없는 부모 디렉터리를 만들고 이미 있는 `GRAPH.md`는 거부한다.
-새 노드는 `python3 scripts/graph_update.py add-row {GRAPH.md 경로} --node-line '{mermaid 노드 정의 줄}' --edge '{관계선}' --row '{14열 노드 행}'`로 추가한다. 관계선마다 `--edge`를 반복하고 없으면 생략한다.
-승인된 노드 삭제는 `python3 scripts/graph_update.py remove-node {GRAPH.md 경로} {노드 ID}`로 기록한다. 노드 정의 줄·그 노드가 끝점인 관계선·표 행을 함께 지운다.
-승인된 관계선 삭제는 `python3 scripts/graph_update.py remove-edge {GRAPH.md 경로} --edge '{관계선}'`로, 추가는 `python3 scripts/graph_update.py add-edge {GRAPH.md 경로} --edge '{관계선}'`로 기록한다. 관계선 교체는 기존 선을 지운 뒤 새 선을 더한다.
-열은 `python3 scripts/graph_update.py set {GRAPH.md 경로} {노드 ID} '상태=완료' 'agentId={ID}'`처럼 바꿀 `열=값`만 넘긴다. `set`은 mermaid 정의가 없어도 표 행이 있으면 해당 열을 바꾼다. 각 갱신은 도구 호출 한 번이다.
+새 노드는 Python으로 실행하는 `scripts/graph_update.py add-row {GRAPH.md 경로} --node-line '{mermaid 노드 정의 줄}' --edge '{관계선}' --row '{14열 노드 행}'`로 추가한다. 관계선마다 `--edge`를 반복하고 없으면 생략한다.
+요청 범위 안에서 정한 노드 삭제는 Python으로 실행하는 `scripts/graph_update.py remove-node {GRAPH.md 경로} {노드 ID}`로 기록한다. 노드 정의 줄·그 노드가 끝점인 관계선·표 행을 함께 지운다.
+요청 범위 안에서 정한 관계선 삭제는 Python으로 실행하는 `scripts/graph_update.py remove-edge {GRAPH.md 경로} --edge '{관계선}'`로, 추가는 Python으로 실행하는 `scripts/graph_update.py add-edge {GRAPH.md 경로} --edge '{관계선}'`로 기록한다. 관계선 교체는 기존 선을 지운 뒤 새 선을 더한다. 내린 결정과 선택 가정은 완료 보고에 적고, 되돌리기 어려운 행동이 끼면 기존대로 확인한다.
+열은 Python으로 실행하는 `scripts/graph_update.py set {GRAPH.md 경로} {노드 ID} '상태=완료' 'agentId={ID}'`처럼 바꿀 `열=값`만 넘긴다. `set`은 mermaid 정의가 없어도 표 행이 있으면 해당 열을 바꾼다. 각 갱신은 도구 호출 한 번이다.
 
 `GRAPH.md`는 mermaid 1개와 노드 표 1개만 둔다 — 스크립트가 그 블록을 갱신하며 새 갱신본을
 뒤에 덧붙이는 것이 아니다. 노드 추가·삭제는 mermaid와 표에 함께 반영하고 관계선 변경은 mermaid에 반영한다.
@@ -44,7 +44,7 @@ delegation.md 「전제 점검」에서 확인한 알림·대기 수단을 쓴�
 1. **`create_agent` 호출 전에** `create` 또는 `add-row`로 노드 행을 쓴다. 계획이 확정된 실행은 mermaid 블록과 합격 기준·결과 파일·실패 보고 경로·재시도 한도·검토 라운드 상한/사용 횟수를 담은 행을 먼저 쓴다. 호출 결과를 받는 **즉시** `set`으로 `agentId`를 채운다.
 2. 재시도 사용 횟수는 재기동 `create_agent` **전에** `set`으로 올린다.
 3. 노드 판정은 확인 **즉시** `set`으로 상태 열에 반영한다. 공동 판정·분기 결정도 표를 갱신하고 상태 문자열을 mermaid에 넣지 않는다.
-4. 승인받은 범위 변경 주입을 보낸 **뒤** `set`으로 그 행을 갱신한다.
+4. 실행 중 지시를 보낸 **뒤** `set`으로 그 행을 갱신한다. 승인 필요 여부는 delegation.md 「실행 중 개입과 실패」를 따른다.
 5. 사용자가 중단하면 그 시점 상태를 **즉시** 갱신한다. 스테이지 경계는 다음 단계 기동을 판단하는 시점이다.
 
 검토 라운드·재작업·사용자 게이트·순차 후속 노드의 추가 기록 시점은 `references/level2.md`의 「기록 시점」을 따른다.
@@ -65,9 +65,8 @@ delegation.md 「전제 점검」에서 확인한 알림·대기 수단을 쓴�
 아니라 **레벨 판정이 틀렸다는 신호**다.
 
 1. 남은 대기 큐의 투입을 멈춘다. 실행 중인 워커는 중단하지 않고 결과를 받는다.
-2. 발견한 의존 관계를 명시해 알린다. "레벨 1로 판정했는데 작업 N이 작업 M의 결과 파일을 필요로
-   한다"까지 적는다.
+2. 발견한 의존 관계를 기록하고 완료 보고에 재판정 결정·근거와 가정을 적는다.
 3. 남은 작업은 delegation.md 「레벨 판정 게이트」 Step 1에 걸린다 — 레벨 2로 재판정해 [references/level2.md](level2.md)로 간다. 순차로 다시 배열해
-   레벨 1로 이어 가지 않는다.
+   레벨 1로 이어 가지 않는다. 같은 요청 결과·권한 범위의 전환은 추가 승인 없이 진행하며, 실행 전 계획 승인은 최초 1회만 받는다. 되돌리기 어려운 행동이 끼면 기존대로 확인한다.
 4. 이미 완료된 작업은 다시 기동하지 않는다. 그 결과 파일 경로를 새 그래프의 스테이지 1
    입력으로 재사용한다.

@@ -6,10 +6,12 @@
 
 ## 점검·적용
 
+명령 견본의 `{Python 실행 명령}`은 SKILL.md 「수행자 선택」에서 세션 최초에 판정한 명령으로 바꿔 적는다.
+
 `--value`에 추가할 한 줄만 주고 실행한다. 그 줄이 이미 있으면 `alreadyPresent`가 참으로 오고 아무것도 하지 않는다. 그 사실을 알리고 끝낸다.
 
 ```text
-python3 scripts/append_system_prompt.py --value "추가할 한 줄"
+{Python 실행 명령} scripts/append_system_prompt.py --value "추가할 한 줄"
 ```
 
 SKILL.md 「세션이 이 스킬을 참조하지 않고 지나갈 때」의 명시 승인을 받은 뒤에만 같은 명령에 `--apply`를 붙인다. 백업·반영·reload·로그 재적재 확인과 실패 시 롤백은 스크립트가 한다.
@@ -19,5 +21,5 @@ SKILL.md 「세션이 이 스킬을 참조하지 않고 지나갈 때」의 명�
 되돌릴 때는 `--rollback`에 백업 경로를 준다. `--apply`가 없으면 이것도 dry-run이다.
 
 ```text
-python3 scripts/append_system_prompt.py --rollback "백업 경로" --apply
+{Python 실행 명령} scripts/append_system_prompt.py --rollback "백업 경로" --apply
 ```
