@@ -417,10 +417,7 @@ function summaryPrompt(input: SummaryInput) {
 }
 
 export function cleanSummaryPair(raw: string) {
-  const lines = raw.replace(/\r\n?/g, "\n").split("\n");
-  if (lines.length === 3 && lines[2] === "") {
-    lines.pop();
-  }
+  const lines = raw.replace(/\r\n?/g, "\n").split("\n").filter((line) => line.trim().length > 0);
   if (lines.length !== 2) {
     throw new Error("expected exactly two lines");
   }

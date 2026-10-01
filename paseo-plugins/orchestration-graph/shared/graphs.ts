@@ -4,7 +4,7 @@ import { z } from "zod";
 export const GRAPH_WAITING_LABEL = "작업 대기중" as const;
 
 /** 요약을 만들지 못한 그래프에 붙는 문구. 목록 항목과 요약란이 이 값을 쓴다. */
-export const GRAPH_SUMMARY_FAILED_LABEL = "요약 모델 연결 안 됨." as const;
+export const GRAPH_SUMMARY_FAILED_LABEL = "요약 생성 실패." as const;
 
 /** 요약란 요약의 통과 기준. 모델 지시에는 넣지 않으며, 여유는 프롬프트의 지침값과 이 값 사이에 있다. */
 export const SUMMARY_MAX_CHARS = 120;

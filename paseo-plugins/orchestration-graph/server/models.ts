@@ -25,7 +25,7 @@ export const CANDIDATE_TIMEOUT_MS = 20000;
 /** 모든 그래프를 합쳐 동시에 진행하는 후보 실행 수의 상한. */
 const MAX_ACTIVE_CANDIDATES = 3;
 
-/** 후보 순회 또는 한 후보의 요약 검사가 끝내 실패하면 `generate`가 던진다. */
+/** 모든 후보가 실패하거나 소유 프로세스 회수가 실패하면 `generate`가 던진다. */
 export class SummaryModelError extends Error {
   constructor(message: string) {
     super(message);
@@ -60,7 +60,7 @@ export function localModelConfig(): LocalConfig {
 
 /**
  * 후보를 고정 순서로 돌린다. 원문을 받은 뒤 검사에 실패하면 같은 후보에 최대 두 번 재요청한다.
- * 연결 실패에만 다음 후보로 넘어가고, 검사 실패 동안은 실행 슬롯을 유지한다.
+ * 호출 실패나 세 번의 검사 실패 뒤 다음 후보로 넘어가고, 검사 재시도 동안은 실행 슬롯을 유지한다.
  */
 export async function generate(options: GenerateOptions): Promise<string> {
   const failures: string[] = [];
@@ -104,7 +104,8 @@ export async function generate(options: GenerateOptions): Promise<string> {
           const reason = error instanceof Error ? error.message : String(error);
           logCall(candidate.name, "ok=false reason=" + reason);
           if (attempt === 3) {
-            throw new SummaryModelError(candidate.name + ": " + reason);
+            failures.push(candidate.name + ": " + reason);
+            break;
           }
         }
       }
