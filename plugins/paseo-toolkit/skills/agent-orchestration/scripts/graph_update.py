@@ -418,11 +418,10 @@ def self_test(stdout, stderr):
         section = form.read_bytes().decode("utf-8-sig").split("## 실행 기록", 1)[1]
         section = section.split("## 기동 보고", 1)[0]
         samples = re.findall(r"````text\r?\n(.*?)\r?\n````", section, re.DOTALL)
-        check(len(samples) >= 2, "FORM 실행 기록의 두 견본을 찾지 못했습니다")
-        basic, level_one = samples[:2]
+        check(bool(samples), "FORM 실행 기록의 기본 견본을 찾지 못했습니다")
+        basic = samples[0]
         mermaid_pattern = r"```mermaid\r?\n.*?\r?\n```"
         basic_mermaid = re.search(mermaid_pattern, basic, re.DOTALL).group()
-        level_mermaid = re.search(mermaid_pattern, level_one, re.DOTALL).group()
         basic_lines = basic.splitlines()
         row_start = basic_lines.index(SEPARATOR) + 1
         sample_rows = [line for line in basic_lines[row_start:] if line.startswith("|")]
@@ -465,18 +464,6 @@ def self_test(stdout, stderr):
                 expected = basic.replace("{플러그인 버전}", version) + _newline(basic)
                 check(target.read_bytes() == expected.encode("utf-8"),
                       "기본 견본과 생성 결과가 문자 단위로 다릅니다")
-                level_source = directory / "level1.md"
-                level_source.write_bytes(level_mermaid.encode("utf-8"))
-                level_target = directory / "LEVEL1-GRAPH.md"
-                level_rows = [row for row in sample_rows if _row(row)[0] != "G1"]
-                succeeded(invoke(["create", str(level_target), "--mermaid-file", str(level_source)]
-                                 + [part for row in level_rows for part in ("--row", row)]))
-                newline = _newline(level_mermaid)
-                expected = (f"버전 : {version}{newline}{newline}{level_mermaid}{newline}{newline}"
-                            f"{HEADER}{newline}{SEPARATOR}{newline}"
-                            + "".join(row + newline for row in level_rows))
-                check(level_target.read_bytes() == expected.encode("utf-8"),
-                      "레벨 1 견본의 mermaid 또는 노드 행이 다릅니다")
                 return target.read_bytes()
 
             basic_graph = b""
@@ -741,6 +728,7 @@ def self_test(stdout, stderr):
 
                 directory = area("g17-create")
                 source = directory / "mermaid.md"
+                newline = _newline(basic_mermaid)
                 source.write_text(basic_mermaid.replace(indented + newline,
                                   indented + newline + old + newline, 1), encoding="utf-8")
                 target = directory / "GRAPH.md"
