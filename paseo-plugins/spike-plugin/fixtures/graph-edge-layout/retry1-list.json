@@ -1,0 +1,17 @@
+{
+  "exitCode": 0,
+  "output": {
+    "id": "spike-plugin",
+    "path": "P:\\Paseo\\worktrees\\3ma3dsg9\\modest-husky\\paseo-plugins\\spike-plugin",
+    "enabled": true,
+    "status": "running",
+    "installation": {
+      "identity": {
+        "kind": "directory",
+        "path": "P:\\Paseo\\worktrees\\3ma3dsg9\\modest-husky\\paseo-plugins\\spike-plugin"
+      }
+    }
+  },
+  "observedAt": "2026-10-01T20:35:22.2445507+09:00",
+  "command": "paseo plugin ls spike-plugin --home 'C:\\Users\\magedoga\\.paseo' --json"
+}

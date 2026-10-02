@@ -1,0 +1,7 @@
+{
+  "exitCode": 0,
+  "command": "paseo plugin reload spike-plugin --home 'C:\\Users\\magedoga\\.paseo' --json",
+  "startedAt": "2026-10-01T20:34:59.0917951+09:00",
+  "finishedAt": "2026-10-01T20:35:00.3330401+09:00",
+  "output": "{\r\n  \"id\": \"spike-plugin\",\r\n  \"path\": \"P:\\\\Paseo\\\\worktrees\\\\3ma3dsg9\\\\modest-husky\\\\paseo-plugins\\\\spike-plugin\",\r\n  \"enabled\": true,\r\n  \"status\": \"running\",\r\n  \"installation\": {\r\n    \"identity\": {\r\n      \"kind\": \"directory\",\r\n      \"path\": \"P:\\\\Paseo\\\\worktrees\\\\3ma3dsg9\\\\modest-husky\\\\paseo-plugins\\\\spike-plugin\"\r\n    }\r\n  }\r\n}\r\n"
+}

@@ -1,8 +1,8 @@
 import { Icon } from "@getpaseo/plugin/client/react-native";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, Pressable, Text, View, type ViewStyle } from "react-native";
-import type { GraphNodeShape, GraphView } from "../shared/graphs";
-import { registerStop } from "./cleanup";
+import type { GraphNodeShape, GraphView } from "./graph-types";
+import { registerStop } from "../../cleanup";
 import {
   BADGE_HEIGHT,
   EXIT_FADE_MS,
@@ -19,7 +19,6 @@ import {
   STATUS_ICON,
   STATUS_MOTION_MS,
   incomingPaths,
-  edgeDashPieces,
   edgeLabelPlacements,
   introEdgeDelayMs,
   layoutMoveNeeded,
@@ -47,7 +46,6 @@ type NodePos = {
 };
 
 type SegPos = {
-  endAnchored: boolean;
   left: Animated.Value;
   top: Animated.Value;
   width: Animated.Value;
@@ -105,6 +103,9 @@ const HEAD_HEIGHT = 8;
 const LABEL_MAX_LINES = 2;
 const LABEL_PAD_X = 3;
 const LABEL_PAD_Y = 1;
+/** 점선 엣지의 조각 길이와 간격. */
+const DASH_LENGTH = 8;
+const DASH_GAP = 6;
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -141,28 +142,19 @@ function ensureNodePos(map: Map<string, NodePos>, id: string, box: NodeBox): Nod
   return created;
 }
 
-function segmentAnchor(segment: EdgeSegment) {
-  const rad = segment.deg * Math.PI / 180;
-  return segment.endAnchored
-    ? { left: segment.left + Math.cos(rad) * segment.width, top: segment.top + Math.sin(rad) * segment.width }
-    : { left: segment.left, top: segment.top };
-}
-
 function ensureSegPos(map: Map<string, SegPos>, segment: EdgeSegment, hidden: boolean): SegPos {
   const existing = map.get(segment.key);
   if (existing) {
     return existing;
   }
-  const anchor = segmentAnchor(segment);
   const created: SegPos = {
-    endAnchored: segment.endAnchored ?? false,
-    left: new Animated.Value(anchor.left),
-    top: new Animated.Value(anchor.top),
+    left: new Animated.Value(segment.left),
+    top: new Animated.Value(segment.top),
     width: new Animated.Value(segment.width),
     deg: new Animated.Value(segment.deg),
     opacity: new Animated.Value(hidden ? 0 : 1),
-    leftN: anchor.left,
-    topN: anchor.top,
+    leftN: segment.left,
+    topN: segment.top,
     widthN: segment.width,
     degN: segment.deg,
     peak: segment.width,
@@ -516,9 +508,9 @@ function GateArm({
 }
 
 /** 점선 엣지의 조각들. 길이 상한까지 미리 만들고, 넘치는 조각은 선 상자가 잘라 낸다. */
-function dashPieces(peak: number, offset: number, thickness: number, color: string) {
+function dashPieces(peak: number, thickness: number, color: string) {
   const pieces = [];
-  for (const { left, width } of edgeDashPieces(peak, offset)) {
+  for (let left = 0; left < peak; left += DASH_LENGTH + DASH_GAP) {
     pieces.push(
       <View
         key={String(left)}
@@ -526,7 +518,7 @@ function dashPieces(peak: number, offset: number, thickness: number, color: stri
           position: "absolute",
           left,
           top: 0,
-          width,
+          width: DASH_LENGTH,
           height: thickness,
           backgroundColor: color,
         }}
@@ -559,7 +551,6 @@ function EdgeSegmentView({
   pos,
   thickness,
   dashed,
-  dashOffset = 0,
   head,
   colors,
 }: {
@@ -567,7 +558,6 @@ function EdgeSegmentView({
   pos: SegPos;
   thickness: number;
   dashed: boolean;
-  dashOffset?: number;
   head: boolean;
   colors: GraphThemeColors;
 }) {
@@ -584,8 +574,7 @@ function EdgeSegmentView({
         position: "absolute",
         left: pos.left,
         top: pos.top,
-        // 마지막 조각은 도착 끝점에서 회전하며 선을 왼쪽으로 뻗는다.
-        width: pos.endAnchored ? 0 : pos.width,
+        width: pos.width,
         height: thickness,
         opacity: pos.opacity,
         transform: [{ rotate }],
@@ -596,8 +585,7 @@ function EdgeSegmentView({
       <Animated.View
         style={{
           position: "absolute",
-          left: pos.endAnchored ? undefined : 0,
-          right: pos.endAnchored ? 0 : undefined,
+          left: 0,
           top: 0,
           width: pos.width,
           height: thickness,
@@ -605,11 +593,13 @@ function EdgeSegmentView({
           overflow: dashed ? "hidden" : "visible",
         }}
       >
-        {dashed ? dashPieces(pos.peak, dashOffset, thickness, color) : null}
+        {dashed ? dashPieces(pos.peak, thickness, color) : null}
       </Animated.View>
       {head ? (
-        // 마지막 조각의 상자는 도착 끝점을 기준으로 회전한다.
-        // 화살촉 꼭짓점도 그 기준점에 붙여 배치 전환 중 노드 경계에서 떨어지지 않게 한다.
+        // 꼭짓점이 선의 끝, 즉 도착 노드 경계에 닿는다. 회전은 선 상자가 이미 하고 있으므로
+        // 조각의 세로 위치만 선 중심에 맞추면 된다. 조각의 오른쪽 끝에 붙이는 이유는 폭이
+        // Animated 값이라 `left`로는 계산할 수 없기 때문이다 — 일반 View는 Animated 값을
+        // 풀지 못해 `left`가 무효가 되고 화살촉이 조각 시작점, 즉 엣지가 꺾이는 자리에 선다.
         <View
           pointerEvents="none"
           style={{
@@ -638,13 +628,15 @@ export type LabelHover = {
 };
 
 /** 선 위에 놓이는 라벨. 절대 좌표로 기울기를 막고, 실측 폭으로 가운데 또는 안쪽 변을 맞춘다. */
-function EdgeLabelView({
+export function EdgeLabelView({
   text,
   x,
   y,
   align,
   colors,
   onHover,
+  onMeasure,
+  pressTooltip,
 }: {
   text: string;
   x: number;
@@ -652,6 +644,8 @@ function EdgeLabelView({
   align: "center" | "start" | "end";
   colors: GraphThemeColors;
   onHover?: (hover: LabelHover | null) => void;
+  onMeasure?: (size: { width: number; height: number }) => void;
+  pressTooltip?: boolean;
 }) {
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [shownHeight, setShownHeight] = useState(0);
@@ -664,9 +658,10 @@ function EdgeLabelView({
   const textStyle = { color: colors.foregroundMuted, fontSize: 11, lineHeight: 14 } as const;
   return (
     <Pressable
+      onPress={pressTooltip ? () => onHover?.({ text, left, top, width: size.width, height: size.height }) : undefined}
       // 호버만 받는다. 누름 처리자를 두지 않아 라벨 위에서도 캔버스 드래그 팬이 이어진다.
       onHoverIn={() => {
-        if (truncated) {
+        if (truncated || pressTooltip) {
           onHover?.({ text, left, top, width: size.width, height: size.height });
         }
       }}
@@ -674,6 +669,7 @@ function EdgeLabelView({
       // 실측한 폭으로 양방향 라벨은 안쪽 변을, 그 밖의 라벨은 중심을 선 중점에 맞춘다.
       onLayout={(event) => {
         const { width, height } = event.nativeEvent.layout;
+        onMeasure?.({ width, height });
         setSize((prev) => (prev.width === width && prev.height === height ? prev : { width, height }));
       }}
       style={{
@@ -725,12 +721,18 @@ export function GraphCanvas({
   colors,
   onNodePress,
   onLabelHover,
+  onLabelMeasure,
+  hideEdges,
+  overlay,
 }: {
   view: GraphView;
   placed: PlacedGraph;
   colors: GraphThemeColors;
   onNodePress?: (agentId: string) => void;
   onLabelHover?: (hover: LabelHover | null) => void;
+  onLabelMeasure?: (key: string, size: { width: number; height: number }) => void;
+  hideEdges?: boolean;
+  overlay?: ReactNode;
 }) {
   const nodePos = useRef(new Map<string, NodePos>());
   const segPos = useRef(new Map<string, SegPos>());
@@ -1022,7 +1024,6 @@ export function GraphCanvas({
       for (const segment of path.segments) {
         liveSegs.add(segment.key);
         const pos = ensureSegPos(segPos.current, segment, false);
-        const anchor = segmentAnchor(segment);
         if (pos.exiting) {
           stopTracked(segExitStops.current, segment.key);
           pos.exiting = false;
@@ -1047,15 +1048,15 @@ export function GraphCanvas({
           );
         }
         if (
-          pos.leftN === anchor.left &&
-          pos.topN === anchor.top &&
+          pos.leftN === segment.left &&
+          pos.topN === segment.top &&
           pos.widthN === segment.width &&
           pos.degN === segment.deg
         ) {
           continue;
         }
-        pos.leftN = anchor.left;
-        pos.topN = anchor.top;
+        pos.leftN = segment.left;
+        pos.topN = segment.top;
         pos.widthN = segment.width;
         pos.degN = segment.deg;
         pos.peak = Math.max(pos.peak, segment.width);
@@ -1063,12 +1064,12 @@ export function GraphCanvas({
           pendingStops.current,
           Animated.parallel([
             Animated.timing(pos.left, {
-              toValue: anchor.left,
+              toValue: segment.left,
               duration: LAYOUT_MOVE_MS,
               useNativeDriver: false,
             }),
             Animated.timing(pos.top, {
-              toValue: anchor.top,
+              toValue: segment.top,
               duration: LAYOUT_MOVE_MS,
               useNativeDriver: false,
             }),
@@ -1175,12 +1176,9 @@ export function GraphCanvas({
   return (
     <View style={{ width: placed.canvasWidth, height: placed.canvasHeight }}>
       {/* 엣지 조각과 흐르는 화살표는 각자 터치를 막는다. 이 층은 라벨만 호버를 받도록 열어 둔다. */}
-      <Animated.View pointerEvents="box-none" style={{ opacity: edgesOpacity }}>
-        {placed.paths.flatMap((path) => {
-          let pathOffset = 0;
-          return path.segments.map((segment, segmentIndex) => {
-            const dashOffset = pathOffset;
-            pathOffset += segment.width;
+      <Animated.View pointerEvents={hideEdges ? "none" : "box-none"} style={{ opacity: hideEdges ? 0 : edgesOpacity }}>
+        {placed.paths.flatMap((path) =>
+          path.segments.map((segment, segmentIndex) => {
             if (ghostSegKeys.has(segment.key)) {
               return null;
             }
@@ -1195,7 +1193,6 @@ export function GraphCanvas({
                 color={runningIncoming ? colors.accent : colors.foregroundMuted}
                 thickness={runningIncoming ? 2 : 1}
                 dashed={path.dashed}
-                dashOffset={dashOffset}
                 // 실행 중 엣지는 선을 따라 흐르는 화살표가 방향을 보여 주므로 도착 지점의
                 // 고정 화살촉을 겹쳐 그리지 않는다.
                 head={segmentIndex === path.segments.length - 1 && !runningIncoming}
@@ -1203,8 +1200,8 @@ export function GraphCanvas({
                 pos={pos}
               />
             );
-          });
-        })}
+          }),
+        )}
         {placed.paths.map((path) => {
           if (path.label == null) {
             return null;
@@ -1222,6 +1219,8 @@ export function GraphCanvas({
               align={position.align}
               colors={colors}
               onHover={onLabelHover}
+              onMeasure={onLabelMeasure ? size => onLabelMeasure(path.key, size) : undefined}
+              pressTooltip
             />
           );
         })}
@@ -1237,7 +1236,7 @@ export function GraphCanvas({
           />
         ))}
       </Animated.View>
-      {hasRunning
+      {hasRunning && !hideEdges
         ? incoming.map((path) => {
             const marker = flowMarkers.current.get(path.key);
             if (marker == null) {
@@ -1271,6 +1270,7 @@ export function GraphCanvas({
             );
           })
         : null}
+      {overlay}
       {view.root != null && placed.rootBox != null && !ghostIds.has(view.root.id) ? (
         <NodeBoxView
           mode="root"

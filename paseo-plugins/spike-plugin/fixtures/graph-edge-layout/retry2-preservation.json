@@ -1,0 +1,14 @@
+{
+  "recordedAt": "2026-10-01T11:54:58.264Z",
+  "hashes": {
+    "fixtures/graph-edge-layout/GRAPH.md": "8abba74484a2cb2bb6a4665414bf0c981814f4dd3b58dfa4f545ecd43703e9e1",
+    "fixtures/graph-edge-layout/graph.json": "79426b08376b8c5fd4d82c72d34ec03092dfc0eb2e93eba0ed39d6bff03f30e0",
+    "client/spikes/graph-edge/fixture/graph.ts": "00209de61f3a795efffc970ff5ddf18a42d4eb336a63fdde3ddfb91bc0b41503",
+    "fixtures/graph-edge-layout/measurements.json": "9495760ce9912024d9948f209ab39f8d126462e975c8c38de4faeac0bb9d4b12",
+    "index.client.tsx": "5cf184a8bbae52e0e42955f3dbdebc50ac9588a77561ea9f246fe2859052c253",
+    "../../.skywork/paseo-orchestration/2026-10-01-graph-edge-spike/SPIKE.md": "303d92a7fff008c9b456a264aa3fd628e1e2951e8b4f7a1ed965f8940b81c064",
+    "../../.skywork/paseo-orchestration/2026-10-01-graph-edge-spike/nodes/N2.md": "4dfd7bc420791f371319a2bc5526f0b0d8a4094a3473bac9c74be4cfa88bad6a",
+    "../../.skywork/paseo-orchestration/2026-10-01-graph-edge-spike/nodes/N2.failure.md": "8168928849fde713f315c7c862fb7bef3f72a2744101dc08b2a18db8ddb8d2fd",
+    "../../.skywork/paseo-orchestration/2026-10-01-graph-edge-spike/nodes/N2-retry1.md": "aca9f97c79178c20bcf0f2c551e342127dab38166368ade7dbf5b95d1a9c413a"
+  }
+}

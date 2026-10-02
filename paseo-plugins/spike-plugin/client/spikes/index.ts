@@ -5,6 +5,7 @@ import { Spike09DashedEdge } from "./spike-09-dashed-edge";
 import { Spike10EdgeLabel } from "./spike-10-edge-label";
 import { Spike11LabelTooltip } from "./spike-11-label-tooltip";
 import type { SpikePrototype } from "./types";
+import { GraphEdgeSpike } from "./graph-edge/screen";
 
 /**
  * 판정 화면이 있는 스파이크 목록.
@@ -12,6 +13,7 @@ import type { SpikePrototype } from "./types";
  * 목록 문구는 shared/checklist.ts의 SPIKE_ITEMS와 같아야 하며, 다르면 타입 오류가 난다.
  */
 export const SPIKE_PROTOTYPES: readonly SpikePrototype[] = [
+  { item: "샘플 그래프 연결선 정돈 전후 비교", title: "연결선 정돈 전후 비교", Component: GraphEdgeSpike },
   {
     item: "다크 모드 일반/강조 연결선 가독성 구분",
     title: "스파이크 5 — 연결선 가독성",

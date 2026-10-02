@@ -1,10 +1,10 @@
 import dagre from "./vendor/dagre";
 import type { PluginTheme } from "@getpaseo/plugin";
-import type { GraphNodeShape, GraphNodeStatus } from "../shared/graphs";
+import type { GraphNodeShape, GraphNodeStatus } from "./graph-types";
 
 export type NodeBox = { id: string; left: number; top: number; width: number; height: number };
 
-export type EdgeSegment = { key: string; left: number; top: number; width: number; deg: number; endAnchored?: boolean };
+export type EdgeSegment = { key: string; left: number; top: number; width: number; deg: number };
 
 export type EdgePath = {
   key: string;
@@ -70,85 +70,20 @@ const NODE_PAD_Y = 10;
 const ROOT_HEIGHT = BADGE_HEIGHT + NODE_PAD_Y * 2 + LINE_HEIGHT * 2 + 12;
 const NODE_WIDTH = 260;
 const PAD = 16;
-const CURVE_SEGMENT_MAX_LENGTH = 16;
-const CURVE_FLATNESS = 0.2;
-/** 점선 엣지의 조각 길이와 간격. */
-const DASH_LENGTH = 8;
-const DASH_GAP = 6;
-
-type Point = { x: number; y: number };
-
-/** d3 curveBasis의 끝점 보간과 cubic B-spline 가중치를 적용한다. */
-function basisPoints(points: Point[]): Point[] {
-  if (points.length < 3) {
-    return points;
-  }
-  const result: Point[] = [points[0]];
-  const blend = (a: Point, b: Point, wa: number, wb: number, divisor: number): Point => ({
-    x: (a.x * wa + b.x * wb) / divisor,
-    y: (a.y * wa + b.y * wb) / divisor,
-  });
-  const addLine = (to: Point) => {
-    const from = result[result.length - 1];
-    const count = Math.max(1, Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) / CURVE_SEGMENT_MAX_LENGTH));
-    for (let i = 1; i <= count; i++) {
-      result.push({ x: from.x + (to.x - from.x) * i / count, y: from.y + (to.y - from.y) * i / count });
-    }
-  };
-  const midpoint = (a: Point, b: Point) => blend(a, b, 1, 1, 2);
-  const flatness = (p: Point, a: Point, b: Point) => {
-    const span = Math.hypot(b.x - a.x, b.y - a.y);
-    return span === 0 ? Math.hypot(p.x - a.x, p.y - a.y)
-      : Math.abs((b.x - a.x) * (a.y - p.y) - (a.x - p.x) * (b.y - a.y)) / span;
-  };
-  const cubic = (a: Point, b: Point, c: Point, d: Point): void => {
-    const length = Math.hypot(b.x - a.x, b.y - a.y) + Math.hypot(c.x - b.x, c.y - b.y) + Math.hypot(d.x - c.x, d.y - c.y);
-    if (length <= CURVE_SEGMENT_MAX_LENGTH && Math.max(flatness(b, a, d), flatness(c, a, d)) <= CURVE_FLATNESS) {
-      result.push(d);
-      return;
-    }
-    const ab = midpoint(a, b), bc = midpoint(b, c), cd = midpoint(c, d);
-    const abc = midpoint(ab, bc), bcd = midpoint(bc, cd), middle = midpoint(abc, bcd);
-    cubic(a, ab, abc, middle);
-    cubic(middle, bcd, cd, d);
-  };
-  addLine(blend(points[0], points[1], 5, 1, 6));
-  const addBasis = (a: Point, b: Point, c: Point) => cubic(
-    result[result.length - 1], blend(a, b, 2, 1, 3), blend(a, b, 1, 2, 3),
-    { x: (a.x + 4 * b.x + c.x) / 6, y: (a.y + 4 * b.y + c.y) / 6 },
-  );
-  for (let i = 2; i < points.length; i++) {
-    addBasis(points[i - 2], points[i - 1], points[i]);
-  }
-  addBasis(points[points.length - 2], points[points.length - 1], points[points.length - 1]);
-  addLine(points[points.length - 1]);
-  return result;
-}
-
-/** 짧은 곡선 조각에서도 점선의 간격을 경로 시작점부터 이어 간다. */
-export function edgeDashPieces(peak: number, offset: number): Array<{ left: number; width: number }> {
-  const pieces: Array<{ left: number; width: number }> = [];
-  for (let left = -(offset % (DASH_LENGTH + DASH_GAP)); left < peak; left += DASH_LENGTH + DASH_GAP) {
-    if (left + DASH_LENGTH > 0) {
-      pieces.push({ left, width: DASH_LENGTH });
-    }
-  }
-  return pieces;
-}
 
 function segmentMetrics(ax: number, ay: number, bx: number, by: number): EdgeSegment | null {
   const dx = bx - ax;
   const dy = by - ay;
   const length = Math.sqrt(dx * dx + dy * dy);
-  if (length < 1e-8) {
+  if (length < 1) {
     return null;
   }
   return {
     key: "",
     left: ax,
     top: ay - 1,
-    width: length,
-    // 곡선의 조각 길이를 보존해 선과 흐르는 화살표가 같은 경로를 따른다.
+    width: Math.round(length),
+    // dagre routes with diagonal bends, so the rotation is the real angle of the segment.
     deg: (Math.atan2(dy, dx) * 180) / Math.PI,
   };
 }
@@ -161,12 +96,6 @@ function segmentsFromPoints(keyBase: string, points: Array<{ x: number; y: numbe
       continue;
     }
     drawn.push({ ...follow, key: `${keyBase}-${i}` });
-  }
-  const last = drawn[drawn.length - 1];
-  if (last != null) {
-    // 조각 수가 달라져도 도착 끝점의 애니메이션 좌표를 계속 재사용한다.
-    last.key = `${keyBase}-end`;
-    last.endAnchored = true;
   }
   return drawn;
 }
@@ -186,7 +115,7 @@ export function layoutGraph(
   edges: Array<{ from: string; to: string; dashed: boolean; label: string | null }>,
   compact: boolean,
 ) {
-  const graph = new dagre.graphlib.Graph({ multigraph: true });
+  const graph = new dagre.graphlib.Graph();
   graph.setGraph({
     rankdir: "TB",
     nodesep: compact ? 16 : 24,
@@ -209,12 +138,8 @@ export function layoutGraph(
     graph.setNode(node.id, { width: size.width, height: size.height });
   }
   const incomingCount = new Map<string, number>();
-  const layoutEdges = edges.map((edge, index) => {
-    const reversed = edge.label?.startsWith("피드백") ?? false;
-    return { ...edge, name: `edge-${index}`, reversed, v: reversed ? edge.to : edge.from, w: reversed ? edge.from : edge.to };
-  });
-  for (const edge of layoutEdges) {
-    graph.setEdge(edge.v, edge.w, {}, edge.name);
+  for (const edge of edges) {
+    graph.setEdge(edge.from, edge.to);
     incomingCount.set(edge.to, (incomingCount.get(edge.to) ?? 0) + 1);
   }
   const entryIds = nodes
@@ -222,11 +147,11 @@ export function layoutGraph(
     .filter((id) => (incomingCount.get(id) ?? 0) === 0);
   if (root != null) {
     for (const id of entryIds) {
-      graph.setEdge(root.id, id, {}, `root-${id}`);
+      graph.setEdge(root.id, id);
     }
   }
-  // 피드백은 배치에서만 뒤집고, 접두어 없는 순환은 Dagre가 처리한다.
-  // Node coordinates are centers; boxes are top-left based.
+  // dagre resolves cycles itself, so a back edge is laid out like any other edge and stays in the
+  // drawing. Node coordinates are centers; boxes are top-left based.
   dagre.layout(graph);
   const boxes = new Map<string, NodeBox>();
   const place = (id: string, width: number, height: number) => {
@@ -253,26 +178,23 @@ export function layoutGraph(
     canvasHeight = Math.max(canvasHeight, box.top + box.height + PAD);
   }
   const paths: EdgePath[] = [];
-  const addPath = (key: string, from: string, to: string, dashed: boolean, label: string | null, name: string, reversed: boolean) => {
-    const edge = graph.edge(reversed ? to : from, reversed ? from : to, name) as { points?: Point[] } | undefined;
+  const addPath = (key: string, from: string, to: string, dashed: boolean, label: string | null) => {
+    const edge = graph.edge(from, to) as { points?: Array<{ x: number; y: number }> } | undefined;
     const points = (edge?.points ?? []).map((point) => ({ x: point.x + PAD, y: point.y + PAD }));
-    if (reversed) {
-      points.reverse();
-    }
     if (points.length < 2) {
       return;
     }
-    const segments = segmentsFromPoints(key, basisPoints(points));
+    const segments = segmentsFromPoints(key, points);
     if (segments.length > 0) {
       paths.push({ key, from, to, segments, dashed, label });
     }
   };
-  for (const edge of layoutEdges) {
-    addPath(`${edge.from}-${edge.to}`, edge.from, edge.to, edge.dashed, edge.label, edge.name, edge.reversed);
+  for (const edge of edges) {
+    addPath(`${edge.from}-${edge.to}`, edge.from, edge.to, edge.dashed, edge.label);
   }
   if (root != null) {
     for (const id of entryIds) {
-      addPath(`root-${id}`, root.id, id, false, null, `root-${id}`, false);
+      addPath(`root-${id}`, root.id, id, false, null);
     }
   }
   const labelPositions = edgeLabelPlacements(paths);

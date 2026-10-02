@@ -73,7 +73,7 @@ export default function contribute(client: PluginClientContext) {
   });
   registerStop(stopSubscription);
 
-  void client.paseo.agents.list().then(
+  void client.paseo.agents.list({ subscribe: {} }).then(
     (listed) => {
       if (cleanedUp) {
         return;

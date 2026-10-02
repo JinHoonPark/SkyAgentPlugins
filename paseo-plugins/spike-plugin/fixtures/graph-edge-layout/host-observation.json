@@ -1,0 +1,22 @@
+{
+  "reason": "설치 소스 불일치; 설치 변경 승인 없음",
+  "entries": [
+    {
+      "id": "spike-plugin",
+      "path": "P:\\MyGit\\SkyAgentPlugins\\paseo-plugins\\spike-plugin",
+      "enabled": true,
+      "status": "running",
+      "installation": {
+        "identity": {
+          "kind": "directory",
+          "path": "P:\\MyGit\\SkyAgentPlugins\\paseo-plugins\\spike-plugin"
+        }
+      }
+    }
+  ],
+  "logs": "TIME                      STREAM    MESSAGE                                                                         \r\n2026-09-30T00:01:42.534Z  stdout    [paseo] Loading plugin                                                          \r\n2026-09-30T00:01:43.563Z  stdout    [paseo] Plugin ready                                                            \r\n",
+  "logsExitCode": 0,
+  "listExitCode": 0,
+  "reloadExecuted": false,
+  "observedAt": "2026-10-01T20:02:00.6804062+09:00"
+}

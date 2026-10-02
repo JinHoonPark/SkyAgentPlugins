@@ -1,0 +1,2 @@
+export const mermaidNodeOrder = ["N1","G1","N3","G3","N4","G4","N5","G5","N6","G6","N7","G7","N8","N9","N10","N11","N12","N13"] as const;
+export const mermaidEdgeOrder = ["N1-G1","G1-N1","N3-G3","G3-N3","G3-N4","N4-G4","G4-N3","G4-N1","G4-N5","N5-G5","G5-N6","G5-N7","N6-G6","G6-N6","G6-N7","N7-G7","G7-N7","G7-N8","N8-N9","N9-N8","N9-N7","G1-N3","G1-N5","N3-N10","N10-G3","N3-N11","N11-G3","N12-N4","N13-N4"] as const;

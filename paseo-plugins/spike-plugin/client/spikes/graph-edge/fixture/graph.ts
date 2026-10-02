@@ -1,0 +1,459 @@
+export default {
+  "metadata": {
+    "copiedAt": "2026-10-01T10:36:01.752Z",
+    "sha256": "8abba74484a2cb2bb6a4665414bf0c981814f4dd3b58dfa4f545ecd43703e9e1",
+    "tableRows": 18,
+    "nodes": 18,
+    "directions": 29,
+    "reciprocalPairs": [
+      [
+        "G1",
+        "N1"
+      ],
+      [
+        "G3",
+        "N3"
+      ],
+      [
+        "G6",
+        "N6"
+      ],
+      [
+        "G7",
+        "N7"
+      ],
+      [
+        "N8",
+        "N9"
+      ]
+    ],
+    "hexagons": 6,
+    "dashed": 0,
+    "parserSourceSha256": "a01a1e4f667a991eb9385579a82cc4eb62325aedab218cb36ca09d83d45d7002",
+    "declarationAudit": "모든 노드 선언·도형·방향·라벨·속성 대조 통과; frontmatter 노드 없음"
+  },
+  "nodes": [
+    {
+      "id": "N1",
+      "profile": "스펙 작성 — 스펙(notes: 요구사항·범위·비범위·수용 기준)",
+      "tableStatus": "완료",
+      "status": "완료",
+      "displayName": "스펙 작성 — 스펙(notes: 요구사항·범위·비범위·수용 기준)",
+      "fromTable": true,
+      "labelLines": [
+        "[ N1 · 스펙 ]",
+        "claude-opus-5-5",
+        "SPEC.md 작성"
+      ],
+      "shape": "rect"
+    },
+    {
+      "id": "G1",
+      "profile": "-",
+      "tableStatus": "완료",
+      "status": "완료",
+      "displayName": "-",
+      "fromTable": true,
+      "labelLines": [
+        "[ G1 · 사용자 게이트 ]",
+        "SPEC.md 확정"
+      ],
+      "shape": "hexagon"
+    },
+    {
+      "id": "N3",
+      "profile": "스파이크 설계 — 스파이크 설계(notes: 검증 질문·실험·중단 기준)",
+      "tableStatus": "완료",
+      "status": "완료",
+      "displayName": "스파이크 설계 — 스파이크 설계(notes: 검증 질문·실험·중단 기준)",
+      "fromTable": true,
+      "labelLines": [
+        "[ N3 · 스파이크 설계 ]",
+        "gpt-6-astra",
+        "SPIKE.md 작성"
+      ],
+      "shape": "rect"
+    },
+    {
+      "id": "G3",
+      "profile": "-",
+      "tableStatus": "실행 중",
+      "status": "실행 중",
+      "displayName": "-",
+      "fromTable": true,
+      "labelLines": [
+        "[ G3 · 사용자 게이트 ]",
+        "SPIKE.md 확정"
+      ],
+      "shape": "hexagon"
+    },
+    {
+      "id": "N4",
+      "profile": "스파이크 실행 — 스파이크 실행(notes: 실험·측정·재현 절차)",
+      "tableStatus": "대기",
+      "status": "대기",
+      "displayName": "스파이크 실행 — 스파이크 실행(notes: 실험·측정·재현 절차)",
+      "fromTable": true,
+      "labelLines": [
+        "[ N4 · 스파이크 실행 ]",
+        "gpt-6.1-sol",
+        "토큰·Codex 동작 실험"
+      ],
+      "shape": "rect"
+    },
+    {
+      "id": "G4",
+      "profile": "-",
+      "tableStatus": "대기",
+      "status": "대기",
+      "displayName": "-",
+      "fromTable": true,
+      "labelLines": [
+        "[ G4 · 사용자 게이트 ]",
+        "스파이크 결과 확인"
+      ],
+      "shape": "hexagon"
+    },
+    {
+      "id": "N5",
+      "profile": "마일스톤 판정 — 마일스톤(notes: 확정 스펙의 의존 순서·단계별 결과)",
+      "tableStatus": "대기",
+      "status": "대기",
+      "displayName": "마일스톤 판정 — 마일스톤(notes: 확정 스펙의 의존 순서·단계별 결과)",
+      "fromTable": true,
+      "labelLines": [
+        "[ N5 · 마일스톤 ]",
+        "claude-opus-5-5",
+        "마일스톤 필요성 판정안"
+      ],
+      "shape": "rect"
+    },
+    {
+      "id": "G5",
+      "profile": "-",
+      "tableStatus": "대기",
+      "status": "대기",
+      "displayName": "-",
+      "fromTable": true,
+      "labelLines": [
+        "[ G5 · 공동 판정 ]",
+        "마일스톤 필요성"
+      ],
+      "shape": "hexagon"
+    },
+    {
+      "id": "N6",
+      "profile": "마일스톤 작성 — 마일스톤(notes: 의존 순서·단계별 결과)",
+      "tableStatus": "대기",
+      "status": "대기",
+      "displayName": "마일스톤 작성 — 마일스톤(notes: 의존 순서·단계별 결과)",
+      "fromTable": true,
+      "labelLines": [
+        "[ N6 · 마일스톤 ]",
+        "claude-opus-5-5",
+        "MILESTONES.md 작성"
+      ],
+      "shape": "rect"
+    },
+    {
+      "id": "G6",
+      "profile": "-",
+      "tableStatus": "대기",
+      "status": "대기",
+      "displayName": "-",
+      "fromTable": true,
+      "labelLines": [
+        "[ G6 · 사용자 게이트 ]",
+        "MILESTONES.md 확정"
+      ],
+      "shape": "hexagon"
+    },
+    {
+      "id": "N7",
+      "profile": "태스크 분해 — 태스크 분해(notes: 마일스톤 하나를 코드와 대조해 분할)",
+      "tableStatus": "대기",
+      "status": "대기",
+      "displayName": "태스크 분해 — 태스크 분해(notes: 마일스톤 하나를 코드와 대조해 분할)",
+      "fromTable": true,
+      "labelLines": [
+        "[ N7 · 태스크 분해 ]",
+        "gpt-6.1-sol",
+        "마일스톤 태스크 분해"
+      ],
+      "shape": "rect"
+    },
+    {
+      "id": "G7",
+      "profile": "-",
+      "tableStatus": "대기",
+      "status": "대기",
+      "displayName": "-",
+      "fromTable": true,
+      "labelLines": [
+        "[ G7 · 사용자 게이트 ]",
+        "태스크 확정"
+      ],
+      "shape": "hexagon"
+    },
+    {
+      "id": "N8",
+      "profile": "구현 — 구현(notes: 확정 설계·수용 기준으로 구현)",
+      "tableStatus": "대기",
+      "status": "대기",
+      "displayName": "구현 — 구현(notes: 확정 설계·수용 기준으로 구현)",
+      "fromTable": true,
+      "labelLines": [
+        "[ N8 · 구현 ]",
+        "gpt-6.1-sol",
+        "XR Assist 구현·자체 테스트"
+      ],
+      "shape": "rect"
+    },
+    {
+      "id": "N9",
+      "profile": "독립 리뷰 — 리뷰·검증(notes: 수용 기준·회귀 대조, 코드 수정 안 함)",
+      "tableStatus": "대기",
+      "status": "대기",
+      "displayName": "독립 리뷰 — 리뷰·검증(notes: 수용 기준·회귀 대조, 코드 수정 안 함)",
+      "fromTable": true,
+      "labelLines": [
+        "[ N9 · 리뷰·검증 ]",
+        "gpt-6-astra",
+        "마일스톤 독립 리뷰"
+      ],
+      "shape": "rect"
+    },
+    {
+      "id": "N10",
+      "profile": "리뷰·검증 — 리뷰·검증(notes: 수용 기준·회귀 대조, 코드 수정 안 함)",
+      "tableStatus": "완료",
+      "status": "완료",
+      "displayName": "리뷰·검증 — 리뷰·검증(notes: 수용 기준·회귀 대조, 코드 수정 안 함)",
+      "fromTable": true,
+      "labelLines": [
+        "[ N10 · 리뷰 ]",
+        "gpt-6-astra",
+        "SPIKE.md 독립 리뷰"
+      ],
+      "shape": "rect"
+    },
+    {
+      "id": "N11",
+      "profile": "자문 - Claude — 자문(notes: 사용자 승인 목적의 기술·보안·설계 쟁점 판단)",
+      "tableStatus": "완료",
+      "status": "완료",
+      "displayName": "자문 - Claude — 자문(notes: 사용자 승인 목적의 기술·보안·설계 쟁점 판단)",
+      "fromTable": true,
+      "labelLines": [
+        "[ N11 · 자문 ]",
+        "claude-opus-5-5",
+        "SPIKE.md 치명 쟁점 자문"
+      ],
+      "shape": "rect"
+    },
+    {
+      "id": "N12",
+      "profile": "스파이크 실행 — 스파이크 실행(notes: 실험·측정·재현 절차)",
+      "tableStatus": "실패",
+      "status": "실패",
+      "displayName": "스파이크 실행 — 스파이크 실행(notes: 실험·측정·재현 절차)",
+      "fromTable": true,
+      "labelLines": [
+        "[ N12 · 스파이크 실행 ]",
+        "gpt-6.1-sol",
+        "Codex 0.159.1 오프라인 컴파일"
+      ],
+      "shape": "rect"
+    },
+    {
+      "id": "N13",
+      "profile": "추론 명령 실행 — 추론 명령 실행(notes: 명령 선택·사전 조건·출력 해석, 워크스페이스 밖 환경 점검)",
+      "tableStatus": "완료",
+      "status": "완료",
+      "displayName": "추론 명령 실행 — 추론 명령 실행(notes: 명령 선택·사전 조건·출력 해석, 워크스페이스 밖 환경 점검)",
+      "fromTable": true,
+      "labelLines": [
+        "[ N13 · 추론 명령 실행 ]",
+        "gpt-6.1-sol",
+        "Rust 1.95.0 설치·온라인 컴파일"
+      ],
+      "shape": "rect"
+    }
+  ],
+  "edges": [
+    {
+      "from": "N1",
+      "to": "G1",
+      "dashed": false,
+      "label": "확정 요청"
+    },
+    {
+      "from": "G1",
+      "to": "N1",
+      "dashed": false,
+      "label": "피드백"
+    },
+    {
+      "from": "N3",
+      "to": "G3",
+      "dashed": false,
+      "label": "확정 요청"
+    },
+    {
+      "from": "G3",
+      "to": "N3",
+      "dashed": false,
+      "label": "피드백"
+    },
+    {
+      "from": "G3",
+      "to": "N4",
+      "dashed": false,
+      "label": "확정"
+    },
+    {
+      "from": "N4",
+      "to": "G4",
+      "dashed": false,
+      "label": "결과 확인 요청"
+    },
+    {
+      "from": "G4",
+      "to": "N3",
+      "dashed": false,
+      "label": "피드백: 실험 보완"
+    },
+    {
+      "from": "G4",
+      "to": "N1",
+      "dashed": false,
+      "label": "피드백: 스펙 반영"
+    },
+    {
+      "from": "G4",
+      "to": "N5",
+      "dashed": false,
+      "label": "확인"
+    },
+    {
+      "from": "N5",
+      "to": "G5",
+      "dashed": false,
+      "label": "판정안"
+    },
+    {
+      "from": "G5",
+      "to": "N6",
+      "dashed": false,
+      "label": "필요"
+    },
+    {
+      "from": "G5",
+      "to": "N7",
+      "dashed": false,
+      "label": "생략"
+    },
+    {
+      "from": "N6",
+      "to": "G6",
+      "dashed": false,
+      "label": "확정 요청"
+    },
+    {
+      "from": "G6",
+      "to": "N6",
+      "dashed": false,
+      "label": "피드백"
+    },
+    {
+      "from": "G6",
+      "to": "N7",
+      "dashed": false,
+      "label": "확정"
+    },
+    {
+      "from": "N7",
+      "to": "G7",
+      "dashed": false,
+      "label": "확정 요청"
+    },
+    {
+      "from": "G7",
+      "to": "N7",
+      "dashed": false,
+      "label": "피드백"
+    },
+    {
+      "from": "G7",
+      "to": "N8",
+      "dashed": false,
+      "label": "확정"
+    },
+    {
+      "from": "N8",
+      "to": "N9",
+      "dashed": false,
+      "label": "구현 완료"
+    },
+    {
+      "from": "N9",
+      "to": "N8",
+      "dashed": false,
+      "label": "피드백: 수정 필요, 잔여 2회"
+    },
+    {
+      "from": "N9",
+      "to": "N7",
+      "dashed": false,
+      "label": "통과, 다음 마일스톤"
+    },
+    {
+      "from": "G1",
+      "to": "N3",
+      "dashed": false,
+      "label": "확정"
+    },
+    {
+      "from": "G1",
+      "to": "N5",
+      "dashed": false,
+      "label": "재확정: 스파이크 완료 후"
+    },
+    {
+      "from": "N3",
+      "to": "N10",
+      "dashed": false,
+      "label": "사용자 요청 검토"
+    },
+    {
+      "from": "N10",
+      "to": "G3",
+      "dashed": false,
+      "label": "검토 결과"
+    },
+    {
+      "from": "N3",
+      "to": "N11",
+      "dashed": false,
+      "label": "사용자 요청 자문"
+    },
+    {
+      "from": "N11",
+      "to": "G3",
+      "dashed": false,
+      "label": "자문 결과"
+    },
+    {
+      "from": "N12",
+      "to": "N4",
+      "dashed": false,
+      "label": "빌드 산출물"
+    },
+    {
+      "from": "N13",
+      "to": "N4",
+      "dashed": false,
+      "label": "빌드 산출물"
+    }
+  ]
+} as const;
