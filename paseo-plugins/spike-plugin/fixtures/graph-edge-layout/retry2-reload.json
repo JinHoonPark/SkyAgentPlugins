@@ -1,6 +1,0 @@
-{
-  "finishedAt": "2026-10-01T21:06:01.0394696+09:00",
-  "startedAt": "2026-10-01T21:05:59.6964792+09:00",
-  "output": "{\r\n  \"id\": \"spike-plugin\",\r\n  \"path\": \"P:\\\\Paseo\\\\worktrees\\\\3ma3dsg9\\\\modest-husky\\\\paseo-plugins\\\\spike-plugin\",\r\n  \"enabled\": true,\r\n  \"status\": \"running\",\r\n  \"installation\": {\r\n    \"identity\": {\r\n      \"kind\": \"directory\",\r\n      \"path\": \"P:\\\\Paseo\\\\worktrees\\\\3ma3dsg9\\\\modest-husky\\\\paseo-plugins\\\\spike-plugin\"\r\n    }\r\n  }\r\n}\r\n",
-  "exitCode": 0
-}
