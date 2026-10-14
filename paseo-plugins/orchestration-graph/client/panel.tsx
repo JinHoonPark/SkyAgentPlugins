@@ -22,36 +22,16 @@ import { registerStop } from "./cleanup";
 import { GraphCanvas, type LabelHover } from "./graph-canvas";
 import { applyLiveGraph, toAgentSnapshot } from "./live-graph";
 import { layoutGraph } from "./motion-logic";
+import { listenGraphWheel } from "./web";
+import { canvasToViewport, clamp, DEFAULT_ZOOM, panBounds, zoomAtCursor } from "./zoom-logic";
 
 const FILE_POLL_MS = 2000;
-const PAN_KEEP_PX = 64;
 const PAN_MOVE_THRESHOLD = 2;
 const NO_GRAPH_ITEMS: GraphListItem[] = [];
 /** 잘린 라벨 툴팁의 폭과, 실측 전에 쓰는 높이 어림값. */
 const TOOLTIP_WIDTH = 220;
 const TOOLTIP_ESTIMATED_HEIGHT = 34;
 const TOOLTIP_MARGIN = 8;
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function axisBounds(contentSize: number, viewportSize: number) {
-  const keep = Math.min(contentSize, viewportSize, PAN_KEEP_PX);
-  return { min: keep - contentSize, max: viewportSize - keep };
-}
-
-// Bounds for the camera translate, in viewport pixels, over the raw canvas.
-function panBounds(
-  canvasWidth: number,
-  canvasHeight: number,
-  viewportWidth: number,
-  viewportHeight: number,
-) {
-  const x = axisBounds(canvasWidth, viewportWidth);
-  const y = axisBounds(canvasHeight, viewportHeight);
-  return { minX: x.min, maxX: x.max, minY: y.min, maxY: y.max };
-}
 
 function AgentSnapshotTap({
   agentId,
@@ -194,6 +174,9 @@ export function OrchestrationGraphPanel({
   const [fileView, setFileView] = useState<GraphView | null>(null);
   const camera = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const cameraValue = useRef({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(DEFAULT_ZOOM);
+  const zoomValue = useRef(DEFAULT_ZOOM);
+  const viewportRef = useRef<View>(null);
   const baseCamera = useRef({ x: 0, y: 0 });
   const cameraBounds = useRef({ minX: 0, maxX: 0, minY: 0, maxY: 0 });
   const didPan = useRef(false);
@@ -345,6 +328,8 @@ export function OrchestrationGraphPanel({
     setHoverLabel(null);
     cameraValue.current = { x: 0, y: 0 };
     camera.setValue({ x: 0, y: 0 });
+    zoomValue.current = DEFAULT_ZOOM;
+    setZoom(DEFAULT_ZOOM);
     if (graphName == null || directory == null) {
       return;
     }
@@ -434,7 +419,7 @@ export function OrchestrationGraphPanel({
     if (placed == null) {
       return;
     }
-    const limit = panBounds(placed.canvasWidth, placed.canvasHeight, viewport.width, viewport.height);
+    const limit = panBounds(placed.canvasWidth, placed.canvasHeight, viewport.width, viewport.height, zoom);
     cameraBounds.current = limit;
     const next = {
       x: clamp(cameraValue.current.x, limit.minX, limit.maxX),
@@ -444,6 +429,26 @@ export function OrchestrationGraphPanel({
       cameraValue.current = next;
       camera.setValue(next);
     }
+  }, [placed, viewport, camera, zoom]);
+  useEffect(() => {
+    if (placed == null) {
+      return;
+    }
+    return listenGraphWheel(viewportRef.current, (deltaY, cursor) => {
+      const next = zoomAtCursor(
+        cameraValue.current,
+        zoomValue.current,
+        deltaY,
+        cursor,
+        { width: placed.canvasWidth, height: placed.canvasHeight },
+        viewport,
+      );
+      cameraBounds.current = next.bounds;
+      cameraValue.current = next.camera;
+      camera.setValue(next.camera);
+      zoomValue.current = next.scale;
+      setZoom(next.scale);
+    });
   }, [placed, viewport, camera]);
   const styles = useMemo(
     () => ({
@@ -487,17 +492,22 @@ export function OrchestrationGraphPanel({
   );
   // 툴팁은 그래프 뷰포트(overflow hidden) 바깥인 패널 최상위에 그린다. 뷰포트 안에 두면 가장자리
   // 라벨의 툴팁이 잘리고, zIndex로는 피할 수 없다. 노드 카드(zIndex 3)보다도 위에 온다.
+  const tooltipAnchor = hoverLabel == null ? null : canvasToViewport(
+    { x: hoverLabel.left + hoverLabel.width / 2, y: hoverLabel.top + hoverLabel.height },
+    cameraValue.current,
+    zoom,
+  );
   const tooltipBox =
-    hoverLabel == null || viewport.width === 0
+    tooltipAnchor == null || viewport.width === 0
       ? null
       : {
           left: clamp(
-            viewport.left + cameraValue.current.x + hoverLabel.left + hoverLabel.width / 2 - TOOLTIP_WIDTH / 2,
+            viewport.left + tooltipAnchor.x - TOOLTIP_WIDTH / 2,
             TOOLTIP_MARGIN,
             Math.max(TOOLTIP_MARGIN, panelSize.width - TOOLTIP_WIDTH - TOOLTIP_MARGIN),
           ),
           top: clamp(
-            viewport.top + cameraValue.current.y + hoverLabel.top + hoverLabel.height + 6,
+            viewport.top + tooltipAnchor.y + 6,
             TOOLTIP_MARGIN,
             Math.max(TOOLTIP_MARGIN, panelSize.height - tooltipHeight - TOOLTIP_MARGIN),
           ),
@@ -671,6 +681,7 @@ export function OrchestrationGraphPanel({
       </View>
       {canvasView != null && placed != null ? (
         <View
+          ref={viewportRef}
           style={styles.graphViewport}
           onLayout={(event) => {
             // left·top은 패널 최상위 기준 좌표다. 툴팁을 패널에 띄울 때 캔버스 좌표에 더한다.
@@ -688,7 +699,8 @@ export function OrchestrationGraphPanel({
               {
                 width: placed.canvasWidth,
                 height: placed.canvasHeight,
-                transform: [{ translateX: camera.x }, { translateY: camera.y }],
+                transformOrigin: "0 0",
+                transform: [{ translateX: camera.x }, { translateY: camera.y }, { scale: zoom }],
               },
             ]}
             {...panResponder.panHandlers}
