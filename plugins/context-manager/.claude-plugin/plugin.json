@@ -1,0 +1,8 @@
+{
+  "name": "context-manager",
+  "version": "0.1.0",
+  "description": "Context management utilities for Claude Code (currently: build a /compact instruction that keeps what must survive compaction).",
+  "author": {
+    "name": "Sky"
+  }
+}

@@ -41,6 +41,7 @@ flowchart LR
 | [`paseo-toolkit`](plugins/paseo-toolkit/.claude-plugin/plugin.json) | Claude Code, Codex CLI | 0.18.2 | Paseo 에이전트·데몬 운영: 단계별 워크플로 오케스트레이션, 에이전트 프로필 구성, 결과 보고 |
 | [`codex-skill-creator`](plugins/codex-skill-creator/.codex-plugin/plugin.json) | Codex CLI 전용 | 1.0.0 | 스킬 생성·개선·성능 측정. Claude Code에는 동일 기능의 공식 `skill-creator` 플러그인이 이미 있어 등록하지 않음 |
 | [`orchestration-graph`](paseo-plugins/orchestration-graph/paseo-plugin.json) | Paseo | 0.8.0 | 오케스트레이션 실행 그래프를 Paseo 패널에 표시. `.skywork`의 GRAPH.md 노드 표와 mermaid 엣지를 한 캔버스로 렌더하고, 노드 클릭으로 해당 에이전트로 이동. 데스크톱·웹에서는 커서 기준 휠 줌(25~200%)과 드래그 이동 지원 |
+| [`context-manager`](plugins/context-manager/.claude-plugin/plugin.json) | Claude Code 전용 | 0.1.0 | [`compact-guide`](plugins/context-manager/skills/compact-guide/SKILL.md) 스킬이 압축 뒤에도 남길 필수 내용을 골라 사용자가 붙여 넣어 제출할 `/compact {지침}`을 만든다. 압축은 사용자가 직접 실행 |
 
 ## `paseo-toolkit` 스킬
 

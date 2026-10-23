@@ -6,6 +6,14 @@
   "description": "Personal agent plugin marketplace for Claude Code and Codex CLI.",
   "plugins": [
     {
+      "name": "context-manager",
+      "source": "./plugins/context-manager",
+      "description": "Context management utilities for Claude Code (currently: build a /compact instruction that keeps what must survive compaction).",
+      "keywords": [
+        "category:workflow"
+      ]
+    },
+    {
       "name": "paseo-toolkit",
       "source": "./plugins/paseo-toolkit",
       "description": "Operate Paseo agents and daemon: orchestrate staged workflows, configure agent profiles, and report results.",
