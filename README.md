@@ -38,7 +38,7 @@ flowchart LR
 
 | 플러그인 | 대상 | 버전 | 설명 |
 |---|---|---|---|
-| [`paseo-toolkit`](plugins/paseo-toolkit/.claude-plugin/plugin.json) | Claude Code, Codex CLI | 0.18.2 | Paseo 에이전트·데몬 운영: 단계별 워크플로 오케스트레이션, 에이전트 프로필 구성, 결과 보고 |
+| [`paseo-toolkit`](plugins/paseo-toolkit/.claude-plugin/plugin.json) | Claude Code, Codex CLI | 0.19.0 | Paseo 에이전트·데몬 운영: 단계별 워크플로 오케스트레이션, 에이전트 프로필 구성, 결과 보고 |
 | [`codex-skill-creator`](plugins/codex-skill-creator/.codex-plugin/plugin.json) | Codex CLI 전용 | 1.0.0 | 스킬 생성·개선·성능 측정. Claude Code에는 동일 기능의 공식 `skill-creator` 플러그인이 이미 있어 등록하지 않음 |
 | [`orchestration-graph`](paseo-plugins/orchestration-graph/paseo-plugin.json) | Paseo | 0.8.0 | 오케스트레이션 실행 그래프를 Paseo 패널에 표시. `.skywork`의 GRAPH.md 노드 표와 mermaid 엣지를 한 캔버스로 렌더하고, 노드 클릭으로 해당 에이전트로 이동. 데스크톱·웹에서는 커서 기준 휠 줌(25~200%)과 드래그 이동 지원 |
 | [`context-manager`](plugins/context-manager/.claude-plugin/plugin.json) | Claude Code 전용 | 0.1.0 | [`compact-guide`](plugins/context-manager/skills/compact-guide/SKILL.md) 스킬이 압축 뒤에도 남길 필수 내용을 골라 사용자가 붙여 넣어 제출할 `/compact {지침}`을 만든다. 압축은 사용자가 직접 실행 |
@@ -53,6 +53,7 @@ flowchart LR
 | [`profile-setup`](plugins/paseo-toolkit/skills/profile-setup/SKILL.md) | Paseo 에이전트 프로필(작업 종류별 provider·model·mode·thinking 묶음)을 설계·등록·변경·조회·삭제하고, 설정 파일과 데몬에 기록된 값이 의도대로 들어갔는지 확인한다. |
 | [`profile-test-run`](plugins/paseo-toolkit/skills/profile-test-run/SKILL.md) | 등록된 프로필이 notes가 약속한 대로 동작하는지 실제 작업을 시켜 확인한다. 실행된 에이전트의 model·mode·thinking·features가 프로필과 일치하는지 본 뒤, 결과 품질을 별도 심판 에이전트로 채점해 합불을 낸다. |
 | [`profile-copy`](plugins/paseo-toolkit/skills/profile-copy/SKILL.md) | 이 PC의 Paseo 에이전트 프로필을 다른 사람에게 전달할 수 있는 핸드오프 프롬프트로 추출한다. 설정 파일을 읽기만 하며 바꾸거나 데몬을 재시작하지 않는다. |
+| [`lean-handoff`](plugins/paseo-toolkit/skills/lean-handoff/SKILL.md) | 현재 작업을 다른 에이전트에게 넘길 때 목표·완료 조건·현재 상태·확정 사항·시작 지점·남은 질문 등 필요한 정보만 담은 브리핑을 만들어 받는 에이전트를 기동한다. 추천·폐기된 요구·과거 실패를 현재 지시나 제약으로 올리지 않는다. |
 
 ## `codex-skill-creator` 스킬
 
