@@ -162,15 +162,15 @@ provider의 모델은 조회된 ID와 설명을 보여주되 별도 등급 질�
 | --- | --- | --- | --- | --- | --- | --- |
 | `team-lead` | 팀장 | `claude/claude-opus-5-5 [high]` | `codex/gpt-6.1-sol [high]` | 고성능 | 파일 작성 | compass / violet |
 | `simple-explore` | 단순 탐색 | `codex/gpt-6-luna [medium]` | `codex/gpt-6-luna [high]` | 저성능 | 읽기·확인 | search / sky |
-| `explore` | 추론 탐색 | `codex/gpt-6.1-sol [medium]` | `codex/gpt-6.1-sol [medium]` | 중급 | 읽기·확인 | layers / indigo |
+| `explore` | 추론 탐색 | `codex/gpt-6.1-terra [medium]` | `codex/gpt-6.1-terra [medium]` | 중급 | 읽기·확인 | layers / indigo |
 | `run-command` | 단순 명령 실행 | `codex/gpt-6-luna [low]` | `codex/gpt-6-luna [high]` | 저성능 | 명령 전권 | terminal / sky |
-| `advanced-run-command` | 추론 명령 실행 | `codex/gpt-6.1-sol [medium]` | `codex/gpt-6.1-sol [medium]` | 중급 | 명령 전권 | wrench / teal |
+| `advanced-run-command` | 추론 명령 실행 | `codex/gpt-6.1-terra [medium]` | `codex/gpt-6.1-terra [medium]` | 중급 | 명령 전권 | wrench / teal |
 | `spec` | 스펙 | `claude/claude-opus-5-5 [medium]` | `codex/gpt-6.1-sol [medium]` | 고성능 | 파일 작성 | fileText / emerald |
 | `spike-plan` | 스파이크 설계 | `codex/gpt-6.1-sol [medium]` | `codex/gpt-6.1-sol [medium]` | 중급 | 파일 작성 | flask / amber |
 | `spike` | 스파이크 실행 | `codex/gpt-6.1-sol [medium]` | `codex/gpt-6.1-sol [medium]` | 중급 | 파일 작성 | testTube / orange |
 | `milestone` | 마일스톤 | `claude/claude-opus-5-5 [medium]` | `codex/gpt-6.1-sol [medium]` | 고성능 | 파일 작성 | boxes / blue |
 | `task-breakdown` | 태스크 분해 | `codex/gpt-6.1-sol [medium]` | `codex/gpt-6.1-sol [medium]` | 중급 | 파일 작성 | package / pink |
-| `implement` | 구현 | `codex/gpt-6.1-sol [medium]` | `codex/gpt-6.1-sol [medium]` | 중급 | 파일 작성 | code / orange |
+| `implement` | 구현 | `codex/gpt-6.1-terra [medium]` | `codex/gpt-6.1-terra [medium]` | 중급 | 파일 작성 | code / orange |
 | `light-implement` | 경량 구현 | `codex/gpt-6-luna [max]` | `codex/gpt-6-luna [max]` | 저성능 | 파일 작성 | feather / teal |
 | `debug` | 디버깅 | `codex/gpt-6.1-sol [high]` | `codex/gpt-6.1-sol [high]` | 중급 | 파일 작성 | bug / red |
 | `review` | 리뷰·검증 | `codex/gpt-6.1-sol [high]` | `codex/gpt-6.1-sol [high]` | 중급 | 읽기·확인 | eye / amber |
