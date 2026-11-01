@@ -163,6 +163,7 @@ provider의 모델은 조회된 ID와 설명을 보여주되 별도 등급 질�
 | `team-lead` | 팀장 | `claude/claude-opus-5-5 [high]` | `codex/gpt-6.1-sol [high]` | 고성능 | 파일 작성 | compass / violet |
 | `simple-explore` | 단순 탐색 | `codex/gpt-6-luna [medium]` | `codex/gpt-6-luna [high]` | 저성능 | 읽기·확인 | search / sky |
 | `explore` | 추론 탐색 | `codex/gpt-6.1-terra [medium]` | `codex/gpt-6.1-terra [medium]` | 중급 | 읽기·확인 | layers / indigo |
+| `research` | 조사 분석 | `claude/claude-opus-5-5 [medium]` | `codex/gpt-6-astra [medium]` | 고성능 | 읽기·확인 | eye / orange |
 | `run-command` | 단순 명령 실행 | `codex/gpt-6-luna [low]` | `codex/gpt-6-luna [high]` | 저성능 | 명령 전권 | terminal / sky |
 | `advanced-run-command` | 추론 명령 실행 | `codex/gpt-6.1-terra [medium]` | `codex/gpt-6.1-terra [medium]` | 중급 | 명령 전권 | wrench / teal |
 | `spec` | 스펙 | `claude/claude-opus-5-5 [medium]` | `codex/gpt-6.1-sol [medium]` | 고성능 | 파일 작성 | fileText / emerald |
@@ -198,6 +199,11 @@ provider의 모델은 조회된 ID와 설명을 보여주되 별도 등급 질�
 
 - `notes`: `찾을 대상을 추론으로 좁히거나, 찾은 결과를 여러 파일·문서와 연결해 해석해야 하는 탐색을 맡아 구조·흐름·영향 범위를 근거와 함께 반환한다. 워크스페이스 밖 경로와 공개 웹도 필요하면 읽는다. 그대로 찾으면 되는 검색은 simple-explore, 결함 원인 추적은 debug.`
 - 권한 근거: 읽기만 한다. 구조 해석에 파일 작성이 필요하지 않다.
+
+### `research` — 조사 분석
+
+- `notes`: `조사, 분석하여 정보를 획득할 필요성이 있는 상황에서 사용한다. 여러 출처를 대조해 방법안을 비교하고 추천안을 낸다(근거·예상 결과·위험 포함). 구현·실험은 하지 않는다. 사실 확인만이면 explore.`
+- 권한 근거: 조사·비교·추천만 하고 구현·실험은 하지 않는다. 쓰기 권한을 기본으로 주지 않는다.
 
 ### `run-command` — 단순 명령 실행
 
