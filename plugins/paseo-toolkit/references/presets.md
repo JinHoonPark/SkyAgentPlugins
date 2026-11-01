@@ -139,19 +139,20 @@ provider의 모델은 조회된 ID와 설명을 보여주되 별도 등급 질�
 
 | 권한 등급 | claude | codex |
 | --- | --- | --- |
-| 읽기·확인 | `auto` | `auto` |
-| 파일 작성 | `auto` | `auto-review` |
+| 읽기·확인 | `auto` | `full-access` |
+| 파일 작성 | `auto` | `full-access` |
 | 명령 전권 | `bypassPermissions` | `full-access` |
 
 - **`modeId`는 2단계의 실조회 값으로 맞춘다.** 표에 없는 provider는 `inspect_provider`의
   `modes[].id`를 받아 제약이 큰 쪽부터 세 등급에 대응시킨다. `modes[].id`가 빈 배열이면
   `modeId` 키 자체를 생략한다.
 - **모델·provider 폴백은 권한 폴백이 아니다.** 후보가 기본에서 폴백으로, 폴백에서 등급
-  해석으로 바뀌어도 그 역할의 권한 등급은 바뀌지 않는다. 폴백을 이유로 권한을 올리지 않는다.
-- **명령 전권은 명령 실행 역할에만 붙인다** — `run-command`와 `advanced-run-command`가 그
-  역할이고, 다른 역할에는 붙이지 않는다. codex `full-access`는 네트워크 접근과 무제한 실행을
-  준다. **등록 전에 사용자에게 알리고 확인받는다.** 확인이 없으면 읽기·확인 등급으로 낮춰
-  등록하고, 명령마다 승인 프롬프트가 뜬다는 점을 알린다.
+  해석으로 바뀌어도 그 역할의 권한 등급은 바뀌지 않는다. 폴백을 이유로 권한을 올리지 않는다. codex로 폴백하면 위 표에 따라 `modeId`가 `full-access`가 되며, 이것은 등급 상향이 아니라 provider별 대응이다.
+- **codex는 세 등급 모두 `full-access`다.** `full-access`는 네트워크 접근과 무제한 실행을
+  준다. **등록 전에 사용자에게 알리고 확인받는다.**
+- **claude의 명령 전권은 명령 실행 역할에만 붙인다** — `run-command`와 `advanced-run-command`가
+  그 역할이고, 다른 역할에는 붙이지 않는다. **등록 전에 사용자에게 알리고 확인받는다.** 확인이
+  없으면 읽기·확인 등급으로 낮춰 등록하고, 명령마다 승인 프롬프트가 뜬다는 점을 알린다.
 - claude `plan`은 어느 역할에도 쓰지 않는다. 문서 산출까지 막는다.
 - 이번 재구성을 근거로 **이미 등록된 프로필의 권한을 올리지 않는다.** 이 문서는 등록 제안
   세트이고, 기존 프로필 변경은 사용자가 요청한 범위에서만 한다.
@@ -160,25 +161,27 @@ provider의 모델은 조회된 ID와 설명을 보여주되 별도 등급 질�
 
 | id | name | 기본 추천 | 폴백 | 요구 성능 등급 | 권한 등급 | icon / color |
 | --- | --- | --- | --- | --- | --- | --- |
-| `team-lead` | 팀장 | `claude/claude-opus-5-5 [high]` | `codex/gpt-6.1-sol [high]` | 고성능 | 파일 작성 | compass / violet |
+| `team-lead` | 팀장 | `claude/claude-opus-5-5 [high]` | `codex/gpt-6.1-sol [high]` | 고성능 | 파일 작성 | compass / orange |
 | `simple-explore` | 단순 탐색 | `codex/gpt-6-luna [medium]` | `codex/gpt-6-luna [high]` | 저성능 | 읽기·확인 | search / sky |
-| `explore` | 추론 탐색 | `codex/gpt-6.1-terra [medium]` | `codex/gpt-6.1-terra [medium]` | 중급 | 읽기·확인 | layers / indigo |
+| `explore` | 추론 탐색 | `codex/gpt-6.1-terra [medium]` | `codex/gpt-6.1-terra [medium]` | 중급 | 읽기·확인 | layers / sky |
 | `research` | 조사 분석 | `claude/claude-opus-5-5 [medium]` | `codex/gpt-6-astra [medium]` | 고성능 | 읽기·확인 | eye / orange |
 | `run-command` | 단순 명령 실행 | `codex/gpt-6-luna [low]` | `codex/gpt-6-luna [high]` | 저성능 | 명령 전권 | terminal / sky |
-| `advanced-run-command` | 추론 명령 실행 | `codex/gpt-6.1-terra [medium]` | `codex/gpt-6.1-terra [medium]` | 중급 | 명령 전권 | wrench / teal |
-| `spec` | 스펙 | `claude/claude-opus-5-5 [medium]` | `codex/gpt-6.1-sol [medium]` | 고성능 | 파일 작성 | fileText / emerald |
-| `spike-plan` | 스파이크 설계 | `codex/gpt-6.1-sol [medium]` | `codex/gpt-6.1-sol [medium]` | 중급 | 파일 작성 | flask / amber |
-| `spike` | 스파이크 실행 | `codex/gpt-6.1-sol [medium]` | `codex/gpt-6.1-sol [medium]` | 중급 | 파일 작성 | testTube / orange |
-| `milestone` | 마일스톤 | `claude/claude-opus-5-5 [medium]` | `codex/gpt-6.1-sol [medium]` | 고성능 | 파일 작성 | boxes / blue |
-| `task-breakdown` | 태스크 분해 | `codex/gpt-6.1-sol [medium]` | `codex/gpt-6.1-sol [medium]` | 중급 | 파일 작성 | package / pink |
-| `implement` | 구현 | `codex/gpt-6.1-terra [medium]` | `codex/gpt-6.1-terra [medium]` | 중급 | 파일 작성 | code / orange |
-| `light-implement` | 경량 구현 | `codex/gpt-6-luna [max]` | `codex/gpt-6-luna [max]` | 저성능 | 파일 작성 | feather / teal |
-| `debug` | 디버깅 | `codex/gpt-6.1-sol [high]` | `codex/gpt-6.1-sol [high]` | 중급 | 파일 작성 | bug / red |
-| `review` | 리뷰·검증 | `codex/gpt-6.1-sol [high]` | `codex/gpt-6.1-sol [high]` | 중급 | 읽기·확인 | eye / amber |
-| `advisor` | 자문 - Codex | `codex/gpt-6-astra [high]` | `codex/gpt-6-astra [high]` | 고성능 | 읽기·확인 | brain / indigo |
+| `advanced-run-command` | 추론 명령 실행 | `codex/gpt-6.1-terra [medium]` | `codex/gpt-6.1-terra [medium]` | 중급 | 명령 전권 | wrench / sky |
+| `spec` | 스펙 | `claude/claude-opus-5-5 [medium]` | `codex/gpt-6.1-sol [medium]` | 고성능 | 파일 작성 | fileText / orange |
+| `spike-plan` | 스파이크 설계 | `codex/gpt-6.1-sol [medium]` | `codex/gpt-6.1-sol [medium]` | 중급 | 파일 작성 | flask / sky |
+| `spike` | 스파이크 실행 | `codex/gpt-6.1-sol [medium]` | `codex/gpt-6.1-sol [medium]` | 중급 | 파일 작성 | testTube / sky |
+| `milestone` | 마일스톤 | `claude/claude-opus-5-5 [medium]` | `codex/gpt-6.1-sol [medium]` | 고성능 | 파일 작성 | boxes / orange |
+| `task-breakdown` | 태스크 분해 | `codex/gpt-6.1-sol [medium]` | `codex/gpt-6.1-sol [medium]` | 중급 | 파일 작성 | package / sky |
+| `implement` | 구현 | `codex/gpt-6.1-terra [medium]` | `codex/gpt-6.1-terra [medium]` | 중급 | 파일 작성 | code / sky |
+| `light-implement` | 경량 구현 | `codex/gpt-6-luna [max]` | `codex/gpt-6-luna [max]` | 저성능 | 파일 작성 | feather / sky |
+| `debug` | 디버깅 | `codex/gpt-6.1-sol [high]` | `codex/gpt-6.1-sol [high]` | 중급 | 파일 작성 | bug / sky |
+| `review` | 리뷰·검증 | `codex/gpt-6.1-sol [high]` | `codex/gpt-6.1-sol [high]` | 중급 | 읽기·확인 | eye / sky |
+| `advisor` | 자문 - Codex | `codex/gpt-6-astra [high]` | `codex/gpt-6-astra [high]` | 고성능 | 읽기·확인 | brain / sky |
 
 `icon`과 `color`는 표시 전용이라 라우팅에 영향을 주지 않는다. `icon`은 위의 키를 그대로
 쓰고, `color`는 사용자 지정값·프리셋 색·`none` 순으로 정해 최종 설정 승인에 포함하는 값이다. 선택 가정은 완료 보고에 적는다.
+프리셋 색은 등록하는 provider로 정한다 — claude는 `orange`, codex는 `sky`다. 표의 색은 기본 추천
+provider 기준이며, 폴백 provider로 등록하면 그 provider의 색을 쓴다.
 
 ## 역할 정의
 

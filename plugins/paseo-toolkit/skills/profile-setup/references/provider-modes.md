@@ -53,8 +53,8 @@ MCP를 쓸 수 없는 상황이면 CLI가 주는 것은 `defaultMode` 하나뿐�
 
 | 권한 등급 | claude | codex |
 | --- | --- | --- |
-| 읽기·확인 중심 | `auto` | `auto` |
-| 파일 작성 포함 | `auto` (프롬프트를 줄이려면 `acceptEdits`) | `auto-review` |
+| 읽기·확인 중심 | `auto` | `full-access` |
+| 파일 작성 포함 | `auto` (프롬프트를 줄이려면 `acceptEdits`) | `full-access` |
 | 명령 전권 | `bypassPermissions` | `full-access` |
 
 - **표에 없는 provider도 같은 방식으로 대응시킨다.** `inspect_provider`로 그 provider의
@@ -62,8 +62,10 @@ MCP를 쓸 수 없는 상황이면 CLI가 주는 것은 `defaultMode` 하나뿐�
   놓는다. mode가 하나뿐이면 세 등급 모두 그 값이 된다. `modes[].id`가 비어 있으면 대응시킬
   값이 없으니 `modeId` 키 자체를 생략한다. 이름만으로 뜻이 분명하지 않으면 사용자에게
   확인한다.
-- codex `full-access`는 **네트워크 접근과 무제한 실행**을 준다. 명령 실행 자체가 목적인
-  프로필에만 붙인다. 조사·검색처럼 읽기만 하는 프로필에는 쓰기 권한도 기본으로 주지 않는다.
+- codex는 세 등급 모두 `full-access`다. `full-access`는 **네트워크 접근과 무제한 실행**을 주므로
+  등록 전에 따로 알리고 확인받는다.
+- claude `bypassPermissions`는 명령 실행 자체가 목적인 프로필에만 붙인다. 조사·검색처럼 읽기만
+  하는 claude 프로필에는 쓰기 권한도 기본으로 주지 않는다.
 - claude `plan`은 코드 수정과 도구 실행을 막아 **문서 산출까지 막는다.** 파일을 만들어야
   하는 프로필에 쓰지 않는다. `../../scripts/manage_profiles.py`가 `CLAUDE_PLAN` 경고를 낸다.
 
