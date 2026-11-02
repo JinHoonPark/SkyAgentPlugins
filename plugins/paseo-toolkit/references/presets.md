@@ -172,7 +172,8 @@ provider의 모델은 조회된 ID와 설명을 보여주되 별도 등급 질�
 | `spike` | 스파이크 실행 | `codex/gpt-6.1-sol [medium]` | `codex/gpt-6.1-sol [medium]` | 중급 | 파일 작성 | testTube / sky |
 | `milestone` | 마일스톤 | `claude/claude-opus-5-5 [medium]` | `codex/gpt-6.1-sol [medium]` | 고성능 | 파일 작성 | boxes / orange |
 | `task-breakdown` | 태스크 분해 | `codex/gpt-6.1-sol [medium]` | `codex/gpt-6.1-sol [medium]` | 중급 | 파일 작성 | package / sky |
-| `implement` | 구현 | `codex/gpt-6.1-terra [medium]` | `codex/gpt-6.1-terra [medium]` | 중급 | 파일 작성 | code / sky |
+| `implement` | 닫힌 구현 | `codex/gpt-6.1-terra [high]` | `codex/gpt-6.1-terra [high]` | 중급 | 파일 작성 | code / sky |
+| `open-implement` | 열린 구현 | `codex/gpt-6.1-sol [high]` | `codex/gpt-6.1-sol [high]` | 중급 | 파일 작성 | hammer / sky |
 | `light-implement` | 경량 구현 | `codex/gpt-6-luna [max]` | `codex/gpt-6-luna [max]` | 저성능 | 파일 작성 | feather / sky |
 | `debug` | 디버깅 | `codex/gpt-6.1-sol [high]` | `codex/gpt-6.1-sol [high]` | 중급 | 파일 작성 | bug / sky |
 | `review` | 리뷰·검증 | `codex/gpt-6.1-sol [high]` | `codex/gpt-6.1-sol [high]` | 중급 | 읽기·확인 | eye / sky |
@@ -243,10 +244,15 @@ provider 기준이며, 폴백 provider로 등록하면 그 provider의 색을 �
 - `notes`: `확정된 마일스톤 하나를 코드와 대조해 Task별 작업·대상 파일·완료 조건·검증 방법으로 나눈다. 단계 순서는 milestone. | ★ 지침 : 세션별 작업·대상 파일·완료 조건·검증 방법만, 다른 문서 없이 읽히게 적는다. 분할 이유·근거·실험 이력은 빼고, 파일 경로는 수정 대상 표시에만 쓴다.`
 - 권한 근거: 태스크 문서를 쓴다.
 
-### `implement` — 구현
+### `implement` — 닫힌 구현
 
-- `notes`: `확정된 설계와 수용 기준으로, 호출부·동작 영향 판단이 필요한 기능·변경·원인이 특정된 결함을 구현한다. 설계 미정은 spec, 원인 미상은 debug, 영향 판단이 필요 없는 변경은 light-implement.`
+- `notes`: `확정된 설계와 수용 기준대로, 호출부·동작 영향 판단이 필요한 기능·변경·원인이 특정된 결함을 구현한다. 설계·세부를 추론해 정해야 하면 open-implement, 무엇을 만들지 미정이면 spec, 원인 미상은 debug, 영향 판단이 필요 없으면 light-implement.`
 - 권한 근거: 본 코드를 고치는 역할이다.
+
+### `open-implement` — 열린 구현
+
+- `notes`: `만들 결과와 수용 기준은 정해졌지만 설계·방법·세부가 비어 있는 구현을 맡아, 요구와 코드베이스 관례에서 추론해 정하며 구현한다. 무엇을 만들지 불명확하면 spec, 설계가 확정됐으면 implement. | ★ 지침 : 추론으로 정한 설계 결정과 가정을 결과 보고에 목록으로 남기고, 요구 범위를 넓히는 결정은 하지 않는다.`
+- 권한 근거: 본 코드를 고치는 역할이다. 권한 등급은 `implement`와 같다.
 
 ### `light-implement` — 경량 구현
 
