@@ -178,7 +178,7 @@ provider의 모델은 조회된 ID와 설명을 보여주되 별도 등급 질�
 | `debug` | 디버깅 | `codex/gpt-6.1-sol [high]` | `codex/gpt-6.1-sol [high]` | 중급 | 파일 작성 | bug / sky |
 | `review` | 리뷰·검증 | `codex/gpt-6.1-sol [high]` | `codex/gpt-6.1-sol [high]` | 중급 | 읽기·확인 | eye / sky |
 | `advisor` | 자문 - Codex | `codex/gpt-6-astra [high]` | `codex/gpt-6-astra [high]` | 고성능 | 읽기·확인 | brain / sky |
-| `agent_profile_muksabfv_05c7as5teak8` | 자문 - Claude | `claude/claude-fable-5-2 [medium]` | `claude/claude-fable-5-2 [medium]` | 미분류 | 읽기·확인 | brain / orange |
+| `advisor-claude` | 자문 - Claude | `claude/claude-fable-5-2 [medium]` | `claude/claude-fable-5-2 [medium]` | 미분류 | 읽기·확인 | brain / orange |
 
 `icon`과 `color`는 표시 전용이라 라우팅에 영향을 주지 않는다. `icon`은 위의 키를 그대로
 쓰고, `color`는 사용자 지정값·프리셋 색·`none` 순으로 정해 최종 설정 승인에 포함하는 값이다. 선택 가정은 완료 보고에 적는다.
@@ -275,7 +275,7 @@ provider 기준이며, 폴백 provider로 등록하면 그 provider의 색을 �
 - `notes`: `사용자가 해당 자문 목적을 승인한 경우에만, 다른 워커가 해결하지 못한 기술·보안·설계 쟁점을 근거로 판단한다. 일반 탐색·구현·리뷰는 담당 워커로 보낸다.`
 - 권한 근거: 판단만 하고 산출물을 만들지 않는다. 자문 호출은 사용자 승인이 있을 때만 한다.
 
-### `agent_profile_muksabfv_05c7as5teak8` — 자문 - Claude
+### `advisor-claude` — 자문 - Claude
 
 - `notes`: `사용자가 해당 자문 목적을 승인한 경우에만, 다른 워커가 해결하지 못한 기술·보안·설계 쟁점을 근거로 판단한다. 일반 탐색·구현·리뷰는 담당 워커로 보낸다.`
 - 권한 근거: 판단만 하고 산출물을 만들지 않는다. 자문 호출은 사용자 승인이 있을 때만 한다.
