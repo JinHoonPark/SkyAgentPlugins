@@ -161,23 +161,23 @@ provider의 모델은 조회된 ID와 설명을 보여주되 별도 등급 질�
 
 | id | name | 기본 추천 | 폴백 | 요구 성능 등급 | 권한 등급 | icon / color |
 | --- | --- | --- | --- | --- | --- | --- |
-| `team-lead` | 팀장 | `claude/claude-opus-5-5 [high]` | `codex/gpt-6.1-sol [high]` | 고성능 | 파일 작성 | compass / orange |
+| `team-lead` | 팀장 | `claude/claude-opus-5-5 [high]` | `codex/gpt-6.2-sol [high]` | 고성능 | 파일 작성 | compass / orange |
 | `simple-explore` | 단순 탐색 | `codex/gpt-6-luna [medium]` | `codex/gpt-6-luna [high]` | 저성능 | 읽기·확인 | search / sky |
 | `explore` | 추론 탐색 | `codex/gpt-6.1-terra [medium]` | `codex/gpt-6.1-terra [medium]` | 중급 | 읽기·확인 | layers / sky |
-| `research` | 조사 분석 | `claude/claude-opus-5-5 [high]` | `claude/claude-opus-5-5 [high]` | 고성능 | 읽기·확인 | eye / orange |
+| `research` | 조사 분석 | `claude/claude-opus-5-5 [medium]` | `claude/claude-opus-5-5 [medium]` | 고성능 | 읽기·확인 | eye / orange |
 | `run-command` | 단순 명령 실행 | `codex/gpt-6-luna [low]` | `codex/gpt-6-luna [high]` | 저성능 | 명령 전권 | terminal / sky |
 | `advanced-run-command` | 추론 명령 실행 | `codex/gpt-6.1-terra [medium]` | `codex/gpt-6.1-terra [medium]` | 중급 | 명령 전권 | wrench / sky |
-| `spec` | 스펙 | `claude/claude-opus-5-5 [medium]` | `codex/gpt-6.1-sol [medium]` | 고성능 | 파일 작성 | fileText / orange |
-| `spike-plan` | 스파이크 설계 | `claude/claude-opus-5-5 [medium]` | `codex/gpt-6.1-sol [medium]` | 중급 | 파일 작성 | flask / orange |
-| `spike` | 스파이크 실행 | `codex/gpt-6.1-sol [medium]` | `codex/gpt-6.1-sol [medium]` | 중급 | 파일 작성 | testTube / sky |
-| `milestone` | 마일스톤 | `claude/claude-opus-5-5 [medium]` | `codex/gpt-6.1-sol [medium]` | 고성능 | 파일 작성 | boxes / orange |
-| `task-breakdown` | 태스크 분해 | `codex/gpt-6.1-sol [medium]` | `codex/gpt-6.1-sol [medium]` | 중급 | 파일 작성 | package / sky |
+| `spec` | 스펙 | `claude/claude-opus-5-5 [medium]` | `codex/gpt-6.2-sol [medium]` | 고성능 | 파일 작성 | fileText / orange |
+| `spike-plan` | 스파이크 설계 | `claude/claude-opus-5-5 [medium]` | `codex/gpt-6.2-sol [medium]` | 중급 | 파일 작성 | flask / orange |
+| `spike` | 스파이크 실행 | `codex/gpt-6.2-sol [medium]` | `codex/gpt-6.2-sol [medium]` | 중급 | 파일 작성 | testTube / sky |
+| `milestone` | 마일스톤 | `claude/claude-opus-5-5 [medium]` | `codex/gpt-6.2-sol [medium]` | 고성능 | 파일 작성 | boxes / orange |
+| `task-breakdown` | 태스크 분해 | `codex/gpt-6.2-sol [medium]` | `codex/gpt-6.2-sol [medium]` | 중급 | 파일 작성 | package / sky |
 | `implement` | 닫힌 구현 | `codex/gpt-6.1-terra [high]` | `codex/gpt-6.1-terra [high]` | 중급 | 파일 작성 | code / sky |
-| `open-implement` | 열린 구현 | `codex/gpt-6.1-sol [high]` | `codex/gpt-6.1-sol [high]` | 중급 | 파일 작성 | hammer / sky |
+| `open-implement` | 열린 구현 | `codex/gpt-6.2-sol [high]` | `codex/gpt-6.2-sol [high]` | 중급 | 파일 작성 | hammer / sky |
 | `light-implement` | 경량 구현 | `codex/gpt-6-luna [max]` | `codex/gpt-6-luna [max]` | 저성능 | 파일 작성 | feather / sky |
-| `debug` | 디버깅 | `codex/gpt-6.1-sol [high]` | `codex/gpt-6.1-sol [high]` | 중급 | 파일 작성 | bug / sky |
-| `review` | 리뷰·검증 | `codex/gpt-6.1-sol [high]` | `codex/gpt-6.1-sol [high]` | 중급 | 읽기·확인 | eye / sky |
-| `advisor` | 자문 - Codex | `codex/gpt-6-astra [high]` | `codex/gpt-6-astra [high]` | 고성능 | 읽기·확인 | brain / sky |
+| `debug` | 디버깅 | `codex/gpt-6.2-sol [high]` | `codex/gpt-6.2-sol [high]` | 중급 | 파일 작성 | bug / sky |
+| `review` | 리뷰·검증 | `codex/gpt-6.2-sol [high]` | `codex/gpt-6.2-sol [high]` | 중급 | 읽기·확인 | eye / sky |
+| `advisor` | 자문 - Codex | `codex/gpt-6.2-astra [medium]` | `codex/gpt-6.2-astra [medium]` | 고성능 | 읽기·확인 | brain / sky |
 | `advisor-claude` | 자문 - Claude | `claude/claude-fable-5-2 [medium]` | `claude/claude-fable-5-2 [medium]` | 미분류 | 읽기·확인 | brain / orange |
 
 `icon`과 `color`는 표시 전용이라 라우팅에 영향을 주지 않는다. `icon`은 위의 키를 그대로
