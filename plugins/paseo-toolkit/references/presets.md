@@ -110,9 +110,10 @@ MCP `list_providers`로 활성 provider 목록을 받는다.
 
 | 등급 | codex | claude |
 | --- | --- | --- |
-| 고성능 | `astra` | `opus` |
-| 중급 | `sol` | `sonnet` |
-| 저성능 | `luna` | `haiku` |
+| 최상급 | `astra` | `fable` |
+| 상급 | `sol` | `opus` |
+| 중급 | `terra` | `sonnet` |
+| 하급 | `luna` | `haiku` |
 
 **2. 같은 계열 안에서는 항상 최신 버전을 쓴다.** 모델 ID에서 점(`.`)이나 하이픈(`-`)으로 나뉜
 숫자를 버전으로 읽고, 앞자리부터 숫자로 비교해 가장 큰 것을 고른다. 자리 수가 다르면 없는
@@ -129,11 +130,11 @@ provider의 모델은 조회된 ID와 설명을 보여주되 별도 등급 질�
 임의로 등급을 붙이지 않고 기본 자동 선택에서는 제외한다. 사용자 지정 후보는 완성 구성의 최종 설정 승인에 포함하며 완료 보고에 가정을 적는다.
 
 **6. 역할의 성능 등급으로 모델을 고른다.** 등급 해석은 역할 행의 요구 성능 등급
-(고성능·중급·저성능)으로 후보를 찾는다.
+(최상급·상급·중급·하급)으로 후보를 찾는다.
 
 **7. 활성 provider가 여럿이면 등급마다 후보가 생긴다.** 어느 provider를 쓸지 임의로 고르지
-말고, 등급별 후보를 사용자에게 보여주고 고르게 한다. 역할마다 따로 묻지 않고 고성능·중급·
-저성능 세 등급에 대해 한 번만 묻는다. 사용자가 provider 교체·선호를 이미 지시했으면 그 지시를 승인으로 재사용해 해당 값을 쓰고 다시 묻지 않는다. 지시 없는 장애 대체는 기존대로 승인받는다.
+말고, 등급별 후보를 사용자에게 보여주고 고르게 한다. 역할마다 따로 묻지 않고 최상급·상급·
+중급·하급 네 등급에 대해 한 번만 묻는다. 사용자가 provider 교체·선호를 이미 지시했으면 그 지시를 승인으로 재사용해 해당 값을 쓰고 다시 묻지 않는다. 지시 없는 장애 대체는 기존대로 승인받는다.
 
 ## 권한 등급 → `modeId`
 
@@ -161,24 +162,24 @@ provider의 모델은 조회된 ID와 설명을 보여주되 별도 등급 질�
 
 | id | name | 기본 추천 | 폴백 | 요구 성능 등급 | 권한 등급 | icon / color |
 | --- | --- | --- | --- | --- | --- | --- |
-| `team-lead` | 팀장 | `claude/claude-opus-5-5 [high]` | `codex/gpt-6.2-sol [high]` | 고성능 | 파일 작성 | compass / orange |
-| `simple-explore` | 단순 탐색 | `codex/gpt-6-luna [medium]` | `codex/gpt-6-luna [high]` | 저성능 | 읽기·확인 | search / sky |
+| `team-lead` | 팀장 | `claude/claude-opus-5-5 [high]` | `codex/gpt-6.2-sol [high]` | 상급 | 파일 작성 | compass / orange |
+| `simple-explore` | 단순 탐색 | `codex/gpt-6-luna [medium]` | `codex/gpt-6-luna [high]` | 하급 | 읽기·확인 | search / sky |
 | `explore` | 추론 탐색 | `codex/gpt-6.1-terra [medium]` | `codex/gpt-6.1-terra [medium]` | 중급 | 읽기·확인 | layers / sky |
-| `research` | 조사 분석 | `claude/claude-opus-5-5 [medium]` | `claude/claude-opus-5-5 [medium]` | 고성능 | 읽기·확인 | eye / orange |
-| `run-command` | 단순 명령 실행 | `codex/gpt-6-luna [low]` | `codex/gpt-6-luna [high]` | 저성능 | 명령 전권 | terminal / sky |
+| `research` | 조사 분석 | `claude/claude-opus-5-5 [medium]` | `claude/claude-opus-5-5 [medium]` | 상급 | 읽기·확인 | eye / orange |
+| `run-command` | 단순 명령 실행 | `codex/gpt-6-luna [low]` | `codex/gpt-6-luna [high]` | 하급 | 명령 전권 | terminal / sky |
 | `advanced-run-command` | 추론 명령 실행 | `codex/gpt-6.1-terra [medium]` | `codex/gpt-6.1-terra [medium]` | 중급 | 명령 전권 | wrench / sky |
-| `spec` | 스펙 | `claude/claude-opus-5-5 [medium]` | `codex/gpt-6.2-sol [medium]` | 고성능 | 파일 작성 | fileText / orange |
-| `spike-plan` | 스파이크 설계 | `claude/claude-opus-5-5 [medium]` | `codex/gpt-6.2-sol [medium]` | 중급 | 파일 작성 | flask / orange |
-| `spike` | 스파이크 실행 | `codex/gpt-6.2-sol [medium]` | `codex/gpt-6.2-sol [medium]` | 중급 | 파일 작성 | testTube / sky |
-| `milestone` | 마일스톤 | `claude/claude-opus-5-5 [medium]` | `codex/gpt-6.2-sol [medium]` | 고성능 | 파일 작성 | boxes / orange |
-| `task-breakdown` | 태스크 분해 | `codex/gpt-6.2-sol [medium]` | `codex/gpt-6.2-sol [medium]` | 중급 | 파일 작성 | package / sky |
+| `spec` | 스펙 | `claude/claude-opus-5-5 [medium]` | `codex/gpt-6.2-sol [medium]` | 상급 | 파일 작성 | fileText / orange |
+| `spike-plan` | 스파이크 설계 | `claude/claude-opus-5-5 [medium]` | `codex/gpt-6.2-sol [medium]` | 상급 | 파일 작성 | flask / orange |
+| `spike` | 스파이크 실행 | `codex/gpt-6.2-sol [medium]` | `codex/gpt-6.2-sol [medium]` | 상급 | 파일 작성 | testTube / sky |
+| `milestone` | 마일스톤 | `claude/claude-opus-5-5 [medium]` | `codex/gpt-6.2-sol [medium]` | 상급 | 파일 작성 | boxes / orange |
+| `task-breakdown` | 태스크 분해 | `codex/gpt-6.2-sol [medium]` | `codex/gpt-6.2-sol [medium]` | 상급 | 파일 작성 | package / sky |
 | `implement` | 닫힌 구현 | `codex/gpt-6.1-terra [high]` | `codex/gpt-6.1-terra [high]` | 중급 | 파일 작성 | code / sky |
-| `open-implement` | 열린 구현 | `codex/gpt-6.2-sol [high]` | `codex/gpt-6.2-sol [high]` | 중급 | 파일 작성 | hammer / sky |
-| `light-implement` | 경량 구현 | `codex/gpt-6-luna [max]` | `codex/gpt-6-luna [max]` | 저성능 | 파일 작성 | feather / sky |
-| `debug` | 디버깅 | `codex/gpt-6.2-sol [high]` | `codex/gpt-6.2-sol [high]` | 중급 | 파일 작성 | bug / sky |
-| `review` | 리뷰·검증 | `codex/gpt-6.2-sol [high]` | `codex/gpt-6.2-sol [high]` | 중급 | 읽기·확인 | eye / sky |
-| `advisor` | 자문 - Codex | `codex/gpt-6.2-astra [medium]` | `codex/gpt-6.2-astra [medium]` | 고성능 | 읽기·확인 | brain / sky |
-| `advisor-claude` | 자문 - Claude | `claude/claude-fable-5-2 [medium]` | `claude/claude-fable-5-2 [medium]` | 미분류 | 읽기·확인 | brain / orange |
+| `open-implement` | 열린 구현 | `codex/gpt-6.2-sol [high]` | `codex/gpt-6.2-sol [high]` | 상급 | 파일 작성 | hammer / sky |
+| `light-implement` | 경량 구현 | `codex/gpt-6-luna [max]` | `codex/gpt-6-luna [max]` | 하급 | 파일 작성 | feather / sky |
+| `debug` | 디버깅 | `codex/gpt-6.2-sol [high]` | `codex/gpt-6.2-sol [high]` | 상급 | 파일 작성 | bug / sky |
+| `review` | 리뷰·검증 | `codex/gpt-6.2-sol [high]` | `codex/gpt-6.2-sol [high]` | 상급 | 읽기·확인 | eye / sky |
+| `advisor` | 자문 - Codex | `codex/gpt-6.2-astra [medium]` | `codex/gpt-6.2-astra [medium]` | 최상급 | 읽기·확인 | brain / sky |
+| `advisor-claude` | 자문 - Claude | `claude/claude-fable-5-2 [medium]` | `claude/claude-fable-5-2 [medium]` | 최상급 | 읽기·확인 | brain / orange |
 
 `icon`과 `color`는 표시 전용이라 라우팅에 영향을 주지 않는다. `icon`은 위의 키를 그대로
 쓰고, `color`는 사용자 지정값·프리셋 색·`none` 순으로 정해 최종 설정 승인에 포함하는 값이다. 선택 가정은 완료 보고에 적는다.
