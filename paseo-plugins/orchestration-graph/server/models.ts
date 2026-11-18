@@ -1,23 +1,9 @@
 /**
  * 요약을 만드는 모델 호출. 생성 단계 하나가 이 모듈의 `generate` 하나를 부른다.
  *
- * 로컬 HTTP와 두 CLI 후보가 같은 순서와 실행 슬롯을 공유한다.
+ * 두 CLI 후보를 고정 순서로 돌리고 같은 실행 슬롯을 공유한다.
  */
 import { CliCleanupError, runCliCandidate } from "./cli";
-import { lookup } from "node:dns/promises";
-import { createConnection } from "node:net";
-
-const DEFAULT_BASE_URL = "http://172.20.67.201:8000/v1";
-const DEFAULT_MODEL = "deepseek-v4-flash";
-const DEFAULT_API_KEY = "EMPTY";
-
-/** 로컬 후보의 엔드포인트 하나. `/v1/completions`나 `/v1/responses`로 바꾸지 않는다. */
-const LOCAL_CHAT_PATH = "/chat/completions";
-const LOCAL_MAX_TOKENS = 256;
-
-/** 연결 실패나 응답 시간 초과 뒤 local 후보를 건너뛰는 시간. */
-const LOCAL_SKIP_MS = 5 * 60 * 1000;
-const LOCAL_CONNECT_TIMEOUT_MS = 2000;
 
 /** 한 후보에 한 번 보낼 때의 상한. 후보가 실제로 시작된 뒤부터 센다. */
 export const CANDIDATE_TIMEOUT_MS = 20000;
@@ -35,7 +21,6 @@ export class SummaryModelError extends Error {
 
 /** 후보에 연결하거나 응답 원문을 받는 과정에서 실패한 까닭. */
 class CandidateError extends Error {}
-class LocalConnectionCheckError extends CandidateError {}
 
 export type GenerateOptions = {
   prompt: string;
@@ -45,19 +30,6 @@ export type GenerateOptions = {
   validate?: (raw: string) => string;
 };
 
-type LocalConfig = { baseUrl: string; model: string; apiKey: string };
-
-/**
- * 로컬 접속 기본값을 모아 두는 한 곳. 같은 이름의 환경변수가 있으면 환경변수 값이 이긴다.
- */
-export function localModelConfig(): LocalConfig {
-  return {
-    baseUrl: process.env.PASEO_ORCHESTRATION_GRAPH_LLM_BASE_URL?.trim() || DEFAULT_BASE_URL,
-    model: process.env.PASEO_ORCHESTRATION_GRAPH_LLM_MODEL?.trim() || DEFAULT_MODEL,
-    apiKey: process.env.PASEO_ORCHESTRATION_GRAPH_LLM_API_KEY?.trim() || DEFAULT_API_KEY,
-  };
-}
-
 /**
  * 후보를 고정 순서로 돌린다. 원문을 받은 뒤 검사에 실패하면 같은 후보에 최대 두 번 재요청한다.
  * 호출 실패나 세 번의 검사 실패 뒤 다음 후보로 넘어가고, 검사 재시도 동안은 실행 슬롯을 유지한다.
@@ -65,28 +37,15 @@ export function localModelConfig(): LocalConfig {
 export async function generate(options: GenerateOptions): Promise<string> {
   const failures: string[] = [];
   for (const candidate of candidates()) {
-    if (candidate.name === "local" && isLocalSkipped()) {
-      logCall(candidate.name, "ok=false reason=skipped");
-      failures.push(candidate.name + ": skipped");
-      continue;
-    }
     const release = await acquireCandidateSlot();
     let releaseAllowed = true;
     try {
-      if (candidate.name === "local" && isLocalSkipped()) {
-        logCall(candidate.name, "ok=false reason=skipped");
-        failures.push(candidate.name + ": skipped");
-        continue;
-      }
       for (let attempt = 1; attempt <= 3; attempt += 1) {
         let raw: string;
         try {
           raw = await candidate.run(options);
         } catch (error) {
           const reason = error instanceof Error ? error.message : String(error);
-          if (candidate.name === "local" && startsLocalSkip(error)) {
-            startLocalSkip();
-          }
           logCall(candidate.name, "ok=false reason=" + reason);
           if (error instanceof CliCleanupError) {
             // 소유 프로세스 종료가 확인되지 않으면 슬롯과 후속 후보를 멈춘다.
@@ -120,7 +79,6 @@ type Candidate = { name: string; run: (options: GenerateOptions) => Promise<stri
 
 function candidates(): Candidate[] {
   return [
-    { name: "local", run: runLocalCandidate },
     { name: "codex", run: (options) => runCliCandidate("codex", options) },
     { name: "claude", run: (options) => runCliCandidate("claude", options) },
   ];
@@ -152,159 +110,6 @@ function releaseCandidateSlot() {
     return;
   }
   activeCandidates -= 1;
-}
-
-let localSkippedUntil = 0;
-
-function isLocalSkipped() {
-  return Date.now() < localSkippedUntil;
-}
-
-function startsLocalSkip(error: unknown) {
-  return error instanceof LocalConnectionCheckError || (error instanceof Error && error.message === "timeout");
-}
-
-function startLocalSkip() {
-  localSkippedUntil = Date.now() + LOCAL_SKIP_MS;
-}
-
-// ── 로컬 HTTP 후보 ──────────────────────────────────────────────────────────
-
-async function runLocalCandidate({ prompt, timeoutMs, signal }: GenerateOptions) {
-  const config = localModelConfig();
-  const url = config.baseUrl.replace(/\/+$/, "") + LOCAL_CHAT_PATH;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const onOuterAbort = () => controller.abort();
-  signal?.addEventListener("abort", onOuterAbort);
-
-  try {
-    await checkLocalConnection(config.baseUrl, controller.signal);
-    const body = JSON.stringify({
-      model: config.model,
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: LOCAL_MAX_TOKENS,
-      stream: false,
-    });
-
-    let response: Response;
-    try {
-      response = await fetch(url, {
-        method: "POST",
-        headers: {
-          Authorization: "Bearer " + config.apiKey,
-          "Content-Type": "application/json",
-        },
-        body,
-        signal: controller.signal,
-      });
-    } catch (error) {
-      throw new CandidateError(controller.signal.aborted ? "timeout" : "unreachable " + connectionReason(error));
-    }
-
-    if (!response.ok) {
-      throw new CandidateError("http " + response.status);
-    }
-
-    let payload: unknown;
-    try {
-      payload = await response.json();
-    } catch {
-      throw new CandidateError(controller.signal.aborted ? "timeout" : "invalid json");
-    }
-
-    if (controller.signal.aborted) {
-      throw new CandidateError("timeout");
-    }
-    return readCandidateContent(payload);
-  } finally {
-    clearTimeout(timer);
-    signal?.removeEventListener("abort", onOuterAbort);
-  }
-}
-
-async function checkLocalConnection(baseUrl: string, signal: AbortSignal) {
-  let endpoint: URL;
-  try {
-    endpoint = new URL(baseUrl);
-  } catch {
-    throw new LocalConnectionCheckError("unreachable invalid baseUrl");
-  }
-  const port = endpoint.port.length > 0 ? Number(endpoint.port) : endpoint.protocol === "https:" ? 443 : 80;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), LOCAL_CONNECT_TIMEOUT_MS);
-  const abort = () => controller.abort();
-  signal.addEventListener("abort", abort);
-  try {
-    const address = await waitForAbort(lookup(endpoint.hostname), controller.signal);
-    await connectAndClose(address.address, port, controller.signal);
-  } catch (error) {
-    if (signal.aborted) {
-      throw new CandidateError("timeout");
-    }
-    throw new LocalConnectionCheckError("unreachable " + connectionReason(error));
-  } finally {
-    clearTimeout(timer);
-    signal.removeEventListener("abort", abort);
-  }
-}
-
-function waitForAbort<T>(value: Promise<T>, signal: AbortSignal) {
-  return new Promise<T>((resolve, reject) => {
-    const abort = () => reject(new Error("aborted"));
-    if (signal.aborted) {
-      abort();
-      return;
-    }
-    signal.addEventListener("abort", abort, { once: true });
-    void value.then(
-      (result) => {
-        signal.removeEventListener("abort", abort);
-        resolve(result);
-      },
-      (error) => {
-        signal.removeEventListener("abort", abort);
-        reject(error);
-      },
-    );
-  });
-}
-
-function connectAndClose(host: string, port: number, signal: AbortSignal) {
-  return new Promise<void>((resolve, reject) => {
-    const socket = createConnection({ host, port });
-    const abort = () => socket.destroy(new Error("aborted"));
-    const done = (error?: Error) => {
-      signal.removeEventListener("abort", abort);
-      socket.destroy();
-      error == null ? resolve() : reject(error);
-    };
-    signal.addEventListener("abort", abort, { once: true });
-    socket.once("connect", () => done());
-    socket.once("error", (error) => done(error));
-  });
-}
-
-function connectionReason(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error);
-  const cause = error instanceof Error ? (error.cause as Error | undefined)?.message : undefined;
-  return "connect " + (cause ?? message);
-}
-
-function readCandidateContent(payload: unknown): string {
-  if (payload == null || typeof payload !== "object") {
-    throw new CandidateError("invalid json");
-  }
-  const choices = (payload as { choices?: unknown }).choices;
-  if (!Array.isArray(choices) || choices.length === 0) {
-    throw new CandidateError("missing choices[0].message.content");
-  }
-  const first = choices[0] as { message?: { content?: unknown } } | null;
-  const content = first?.message?.content;
-  if (typeof content !== "string") {
-    throw new CandidateError("missing choices[0].message.content");
-  }
-  return content;
 }
 
 // ── 출력 정리와 제약 검사 ───────────────────────────────────────────────────
