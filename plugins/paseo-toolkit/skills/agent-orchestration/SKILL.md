@@ -48,6 +48,7 @@ Python 실행 명령은 세션에서 처음 한 번 판정한다. `python3`가 �
 
 직접 처리로 판정되면 그 수행을 위한 위임 상세는 읽지 않는다. 독립 검토가 필요해지면 검토 경로에 진입한다.
 위임이면 [references/delegation.md](references/delegation.md)를 따른다. 위임 여부는 다시 묻지 않으며 라우팅은 팀장만 수행하고 워커는 재위임하지 않는다.
+같은 판단 질문에 공동 결론이 필요한 두 워커의 직접 협업은 [references/graph-patterns.md](references/graph-patterns.md)의 적용 조건에 따라 팀장이 레벨 2 계획에 포함한다.
 사용자가 "이제 워커한테 맡겨"·"오케스트레이션으로 전환해"처럼 전환을 지시하면 다음 도구보다 먼저 위임 경로에 들어가 남은 작업을 워커에 맡긴다. 전환 전의 수정은 되돌리지 않는다.
 
 ## 리더가 직접 하는 일
@@ -154,11 +155,11 @@ Python 실행 명령은 세션에서 처음 한 번 판정한다. `python3`가 �
 | [references/delegation.md](references/delegation.md) | 위임으로 판정됐을 때, 또는 독립 검토 노드를 열기 전. 전제 점검·레벨 판정·프로필 선택과 값 이관·브리핑·결과 파일·개입과 실패·취합 |
 | [references/level1.md](references/level1.md) | 레벨 1 기동·큐·재개 전. 「공통 `GRAPH.md` 기록」은 레벨 2에서 그래프를 쓰기 직전에 읽는다 |
 | [references/level2.md](references/level2.md) | 레벨 2 설계·계획 승인·실행·재개·완료 보고 때 필요한 절. 「두 예산 — 사용자 왕복과 검토 라운드」·「팀장 직접 수정 검토」는 레벨 1 검토 노드를 열 때도 읽는다 |
-| [references/graph-patterns.md](references/graph-patterns.md) | 레벨 2 그래프 형태를 고를 때 |
-| [references/failure-handling.md](references/failure-handling.md) | 실패 분류·재시도·셸 실패·프로바이더 장애·권한·재개·검토 판정 분류·그래프 갱신 오류가 생겼을 때 |
-| [references/FORM.md](references/FORM.md) | 발화 배정이 표에 있는지 확인할 때, 승인 화면·기동 보고·완료 보고·실행 기록·게이트 화면을 출력하기 직전 |
+| [references/graph-patterns.md](references/graph-patterns.md) | 레벨 2 그래프 형태를 고를 때. 직접 협업은 설계·브리핑·실행 중 「직접 협업」을 적용한다 |
+| [references/failure-handling.md](references/failure-handling.md) | 실패 분류·재시도·셸 실패·프로바이더 장애·권한·재개·검토 판정 분류·그래프 갱신 오류가 생겼을 때, 직접 협업의 대기 턴을 판정할 때 |
+| [references/FORM.md](references/FORM.md) | 발화 배정이 표에 있는지 확인할 때, 승인 화면·기동 보고·완료 보고·실행 기록·게이트 화면을 출력하기 직전. 직접 협업은 승인 화면과 워커 브리핑을 만들기 직전에 「직접 협업 메시지와 대기 출력」도 읽는다 |
 | [assets/worker-briefing.md](assets/worker-briefing.md) | 일반 워커를 기동하기 직전 |
 | [assets/review-briefing.md](assets/review-briefing.md) | 검토 워커를 기동하기 직전 |
-| [../../references/presets.md](../../references/presets.md) | 적합한 프로필이 없어 이번 실행용 값을 구성할 때 필요한 절만 |
+| [../../references/presets.md](../../references/presets.md) | 적합한 프로필이 없어 이번 실행용 값을 구성할 때 필요한 절만. 직접 협업 정리 담당을 고를 때는 「등급 해석 — 표 밖 후보 만들기」의 계열표를 읽는다 |
 | [references/brainstorming.md](references/brainstorming.md) | 브레인스토밍 진입에 사용자가 동의한 뒤 |
 | [references/system-prompt.md](references/system-prompt.md) | 상시 프롬프트 추가 요청을 점검하기 직전 |
